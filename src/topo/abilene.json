@@ -1,0 +1,21 @@
+{
+  "name": "abilene",
+  "description": "Abilene (Internet2) US backbone, 11 nodes, 14 undirected links = 28 directed edges. Edge list follows Topology Zoo.",
+  "nodes": ["Seattle", "Sunnyvale", "Denver", "KansasCity", "Houston", "Atlanta", "Indianapolis", "Chicago", "NewYork", "Washington", "LosAngeles"],
+  "edges": [
+    ["Seattle", "Sunnyvale"],
+    ["Seattle", "Denver"],
+    ["Sunnyvale", "Denver"],
+    ["Sunnyvale", "LosAngeles"],
+    ["LosAngeles", "Houston"],
+    ["Denver", "KansasCity"],
+    ["KansasCity", "Indianapolis"],
+    ["KansasCity", "Houston"],
+    ["Houston", "Atlanta"],
+    ["Atlanta", "Indianapolis"],
+    ["Indianapolis", "Chicago"],
+    ["Chicago", "NewYork"],
+    ["NewYork", "Washington"],
+    ["Washington", "Atlanta"]
+  ]
+}

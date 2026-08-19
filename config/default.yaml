@@ -1,0 +1,81 @@
+paper_defaults:
+  actor_lr: 6.0e-6
+  critic_lr: 6.0e-7
+  gamma: 0.99
+  clip_eps: 0.2
+  k_epochs: 4
+  alpha1: 0.3
+  alpha2: 0.7
+  zeta1: 0.3
+  zeta2: 0.7
+  hidden_dim: 64
+  k_paths: 4
+
+network:
+  buffer_capacity: 10000
+  service_rates: [1000, 2000, 3000]
+  n_background_flows: 20
+
+traffic:
+  source_mean_rate: 750
+  varying_rates: [250, 375, 500, 750, 1000, 1500, 2000]
+  constant_rates_eval: [250, 1000, 1500, 2000]
+
+dqn:
+  lr: 1.0e-4
+  batch_size: 64
+  buffer_size: 50000
+  target_sync_steps: 1000
+  eps_start: 1.0
+  eps_end: 0.05
+  eps_decay_steps: 20000
+  hidden_dim: 64
+
+grlps:
+  embedding_dim: 8
+  lr: 1.0e-4
+  batch_size: 64
+  buffer_size: 50000
+  target_sync_steps: 1000
+  eps_start: 1.0
+  eps_end: 0.05
+  eps_decay_steps: 20000
+  hidden_dim: 64
+
+smoke:
+  seeds: [0]
+  topologies: [nsfcnet, abilene]
+  pretrain_episodes: 40
+  adapt_episodes: 30
+  eval_episodes: 3
+  horizon: 30
+  constant_rates: [250, 1000]
+  fail_ratios: [0.1]
+  sensitivity: false
+  scenarios: [S1, S2, S3, S4, A]
+
+full:
+  seeds: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+  topologies: [abilene, cernet, claranet, nsfcnet]
+  pretrain_episodes: 600
+  adapt_episodes: 300
+  eval_episodes: 10
+  horizon: 200
+  constant_rates: [250, 1000, 1500, 2000]
+  fail_ratios: [0.1, 0.2, 0.3]
+  sensitivity: true
+  scenarios: [S1, S2, S3, S4, A, H]
+
+sensitivity:
+  k_paths: [2, 4, 8, 16]
+  freeze_fraction: [0.0, 0.25, 0.5, 0.75, 1.0]
+  zeta1: [0.0, 0.3, 0.5, 0.7, 1.0]
+  alpha1: [0.0, 0.3, 0.5, 0.7, 1.0]
+  topo: cernet
+
+gpu:
+  n_vec_envs: 0          # 0 = auto from free VRAM (128/256/512)
+  minibatch: 4096
+  procs_per_gpu: 1
+  tf32: true
+  ensemble: true
