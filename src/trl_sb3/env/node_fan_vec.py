@@ -22,6 +22,7 @@ from typing import Any
 
 import gymnasium as gym
 import numpy as np
+import numpy.typing as npt
 from stable_baselines3.common.vec_env.base_vec_env import (
     VecEnv,
     VecEnvIndices,
@@ -38,14 +39,14 @@ _ATTR_ALIASES: dict[str, str] = {"n": "_n", "mu": "_mu", "pbrs": "_pbrs"}
 class NodeFanVecEnv(VecEnv):
     """单底层 RoutingEnv 的锁步扇出 VecEnv：num_envs=N，obs 行 i 即 slot i 的观测。"""
 
-    _actions: np.ndarray
+    _actions: npt.NDArray[np.int64]
 
     def __init__(self, env: RoutingEnv) -> None:
         # 先绑底层再 super()：基类 __init__ 会调 get_attr("render_mode")（base_vec_env.py:75-79）
         self._env = env
         super().__init__(env._n, env.observation_space, env.action_space)
 
-    def step_async(self, actions: np.ndarray) -> None:
+    def step_async(self, actions: npt.NDArray[np.int64]) -> None:
         self._actions = actions
 
     def step_wait(self) -> VecEnvStepReturn:
@@ -57,7 +58,7 @@ class NodeFanVecEnv(VecEnv):
         obs, reward, terminated, truncated, info = self._env.step(self._actions)
         done = bool(terminated or truncated)
         truncated_only = bool(truncated and not terminated)
-        final_obs: np.ndarray | None = None
+        final_obs: npt.NDArray[np.float64] | None = None
         if done:
             final_obs = obs
             obs, reset_info = self._env.reset()
@@ -104,6 +105,8 @@ class NodeFanVecEnv(VecEnv):
         result = self._env.get_wrapper_attr(method_name)(*method_args, **method_kwargs)
         return [result for _ in slots]
 
-    def env_is_wrapped(self, wrapper_class: type[gym.Wrapper], indices: VecEnvIndices = None) -> list[bool]:
+    def env_is_wrapped(
+        self, wrapper_class: type[gym.Wrapper[Any, Any, Any, Any]], indices: VecEnvIndices = None
+    ) -> list[bool]:
         # 底层裸 RoutingEnv 无 gymnasium Wrapper，恒 False
         return [False for _ in self._get_indices(indices)]

@@ -11,6 +11,7 @@ SB3 2.7.0 契约出处（venv 源码核对）：
 from __future__ import annotations
 
 import numpy as np
+import numpy.typing as npt
 from stable_baselines3.common.vec_env import VecMonitor
 
 from trl_sb3.common.config import resolve_path
@@ -31,7 +32,7 @@ def _make_vec(seed: int = SEED) -> NodeFanVecEnv:
     return NodeFanVecEnv(_make_env(seed))
 
 
-def _fixed_actions(n: int, steps: int = STEPS) -> np.ndarray:
+def _fixed_actions(n: int, steps: int = STEPS) -> npt.NDArray[np.int64]:
     """固定动作序列由独立 rng 生成（不依赖 env rng），与 test_env_determinism 同法。"""
     rng = np.random.default_rng(12345)
     return rng.integers(0, 3, size=(steps, n))
@@ -77,9 +78,11 @@ def test_terminal_observation_and_auto_reset() -> None:
     ref = _make_env()
     ref.reset(seed=SEED)  # 同为显式重播种，与 vec 的 rng 流对齐
     actions = _fixed_actions(vec.num_envs)
-    for t in range(STEPS):
-        final_obs, _, _, truncated, _ = ref.step(actions[t])
-        obs, _, dones, infos = vec.step(actions[t])
+    for t in range(STEPS - 1):  # 前 49 步只推进，末观测在第 50 步捕获
+        ref.step(actions[t])
+        vec.step(actions[t])
+    final_obs, _, _, truncated, _ = ref.step(actions[-1])
+    obs, _, dones, infos = vec.step(actions[-1])
     assert truncated  # 裸 env 第 50 步确实 truncated（对照前提成立）
     assert dones.all()
     for slot, info in enumerate(infos):
@@ -88,6 +91,7 @@ def test_terminal_observation_and_auto_reset() -> None:
         assert np.array_equal(terminal, final_obs[slot])
         assert info["TimeLimit.truncated"] is True
     new_episode_obs, _ = ref.reset()  # 裸 env 第二次 reset = 自动 reset 应到达的同 rng 流位置
+    assert isinstance(obs, np.ndarray)
     assert obs.shape == (N, OBS_DIM)
     assert np.array_equal(obs, new_episode_obs)
     obs, _, dones, infos = vec.step(actions[0])  # 第 51 步：新回合第 1 步
@@ -100,6 +104,7 @@ def test_reset_atomic() -> None:
     reset 逐位相等——若错做 N 次 reset，rng 流推进 N 次，obs 必然不等（原子性证明）。"""
     vec = _make_vec()
     obs = vec.reset(seed=SEED)
+    assert isinstance(obs, np.ndarray)
     ref = _make_env()
     ref_obs, _ = ref.reset(seed=SEED)  # 同为显式重播种的单次 reset
     assert obs.shape == (N, OBS_DIM) and obs.dtype == np.float64
@@ -111,13 +116,14 @@ def test_same_seed_vec_bitwise_identical() -> None:
     obs/rewards/dones 逐位相等。"""
     vec_a, vec_b = _make_vec(), _make_vec()
     obs_a, obs_b = vec_a.reset(seed=SEED), vec_b.reset(seed=SEED)
+    assert isinstance(obs_a, np.ndarray) and isinstance(obs_b, np.ndarray)
     assert np.array_equal(obs_a, obs_b)
     actions = _fixed_actions(vec_a.num_envs, steps=STEPS + 1)
     for t in range(STEPS + 1):
         out_a, out_b = vec_a.step(actions[t]), vec_b.step(actions[t])
-        assert np.array_equal(out_a[0], out_b[0])
-        assert np.array_equal(out_a[1], out_b[1])
-        assert np.array_equal(out_a[2], out_b[2])
+        for field_a, field_b in zip(out_a[:3], out_b[:3], strict=True):
+            assert isinstance(field_a, np.ndarray) and isinstance(field_b, np.ndarray)
+            assert np.array_equal(field_a, field_b)
 
 
 def test_vec_monitor_smoke() -> None:
