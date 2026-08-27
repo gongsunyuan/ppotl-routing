@@ -1,0 +1,23 @@
+# requirements.lock — trl-sb3-ablation experiments package
+# Direct dependencies, all pinned with exact `==`. Do not use >=/<=/~=/ *.
+# Changing any version requires editing this file first, then reinstalling.
+#
+# Full reproduction sequence (Windows PowerShell, uv 0.12.5+):
+#   cd C:\Users\10850\Desktop\mdpi\experiments
+#   uv venv --python 3.13 .venv
+#   uv pip install "torch==2.13.0+cu126" --index-url https://download.pytorch.org/whl/cu126 --python .venv\Scripts\python.exe
+#   uv pip install "stable-baselines3==2.7.0" "gymnasium==1.2.0" "networkx==3.4.2" `
+#     "pyyaml==6.0.2" "numpy==2.2.6" "pytest==8.3.5" "matplotlib==3.10.9" "scipy==1.15.3" `
+#     --python .venv\Scripts\python.exe
+#   uv pip check --python .venv\Scripts\python.exe
+# Transitive deps (filelock, sympy, pandas, pillow, ...) are resolver-chosen, not listed here.
+
+torch==2.13.0+cu126  # --index-url https://download.pytorch.org/whl/cu126
+stable-baselines3==2.7.0
+gymnasium==1.2.0
+networkx==3.4.2
+pyyaml==6.0.2
+numpy==2.2.6
+pytest==8.3.5
+matplotlib==3.10.9
+scipy==1.15.3

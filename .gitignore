@@ -1,6 +1,7 @@
 .venv/
+runs/
+ckpts/
 __pycache__/
-*.pyc
 .pytest_cache/
+ckpts_smoke/
 logs/
-results/

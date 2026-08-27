@@ -1,0 +1,25 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "trl-sb3"
+version = "0.1.0"
+description = "TRL routing ablation rebuilt on Gymnasium + Stable-Baselines3 (clean-room, legacy-faithful)"
+requires-python = ">=3.13,<3.14"
+# 与 requirements.lock 完全一致的 9 条 == 钉版。editable 安装一律加 --no-deps：
+# 依赖的安装与复现由 requirements.lock 头部的命令序列管理，pyproject 只做声明镜像。
+dependencies = [
+    "torch==2.13.0+cu126",       # cu126 wheel 仅在 https://download.pytorch.org/whl/cu126，不在 PyPI
+    "stable-baselines3==2.7.0",
+    "gymnasium==1.2.0",
+    "networkx==3.4.2",
+    "pyyaml==6.0.2",
+    "numpy==2.2.6",
+    "pytest==8.3.5",
+    "matplotlib==3.10.9",
+    "scipy==1.15.3",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/trl_sb3"]
