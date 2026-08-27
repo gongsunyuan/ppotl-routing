@@ -23,3 +23,8 @@ dependencies = [
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/trl_sb3"]
+
+[tool.basedpyright]
+# tests/ 以顶层模块互引（test_freeze ← test_sb3_smoke），与 pytest prepend 导入模式
+# （tests/ 目录进 sys.path）一致；类型检查器同口径解析。
+extraPaths = ["tests"]
