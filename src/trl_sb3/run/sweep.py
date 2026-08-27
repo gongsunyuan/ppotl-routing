@@ -263,7 +263,7 @@ def run_sweep(
         try:
             _execute(task, device)
             done += 1
-        except Exception as exc:  # 单 run 崩溃不拖垮 sweep；FAILED 已由 runner 落盘
+        except Exception as exc:  # noqa: BLE001 — sweep 边界：单 run 崩溃须隔离不拖垮其余 run；FAILED 已由 runner 落盘
             failed += 1
             print(f"[sweep] FAILED arm={task.arm} seed={task.seed} run_id={run_id}: {exc!r}")
     summary = SweepSummary(

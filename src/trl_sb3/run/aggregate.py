@@ -150,14 +150,17 @@ def compute_table(records: list[dict[str, Any]], prereg: dict[str, Any]) -> list
         tau_by_seed: dict[int, float] = {}
         censored = 0
         asym_by_seed: dict[int, list[float]] = {}
+        theta = thetas[(topo, rate)]
+        # 本组 curve 非空 ⇒ 场景 has_learner 为真 ⇒ theta 已推导（非 None）
+        assert theta is not None
         for member in curves:
             episodes, values = _curve_series(member)
-            tau, is_censored = time_to_threshold(episodes, values, thetas[(topo, rate)], window)
+            tau, is_censored = time_to_threshold(episodes, values, theta, window)
             tau_by_seed[member["seed"]] = tau
             censored += int(is_censored)
             if len(values) >= 2:  # strict=False 短曲线降级；<2 点无 CI 可言，该种子不进渐近
                 asym_by_seed[member["seed"]] = list(asymptote(values, k, strict=False))
-        row["theta"] = thetas[(topo, rate)]
+        row["theta"] = theta
         row["tau"] = {"by_seed": tau_by_seed, "n_censored": censored, **_summary(list(tau_by_seed.values()))}
         auc_by_seed = {
             member["seed"]: window_auc(*_curve_series(member), window) for member in curves

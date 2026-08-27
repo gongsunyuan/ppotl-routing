@@ -17,7 +17,12 @@ from stable_baselines3.common.vec_env import VecMonitor
 
 from trl_sb3.common.config import load_config, resolve_path
 from trl_sb3.common.envs import build_routing_env
-from trl_sb3.common.logging_utils import MetricsCSVWriter, make_run_id, run_dir, write_manifest
+from trl_sb3.common.logging_utils import (
+    MetricsCSVWriter,
+    make_run_id,
+    run_dir,
+    write_manifest,
+)
 from trl_sb3.common.run_artifacts import (
     METRICS_COLUMNS,
     build_manifest,
@@ -109,6 +114,7 @@ class _RunLogger(BaseCallback):
             self._episode += 1
             self._step = 0
             if self._episode % self._interval == 0:
+                assert isinstance(self.model, PPO)  # 本回调只挂 PPO（_train_and_write 唯一构造点）
                 result = greedy_eval(ppo_policy(self.model), self._topo, self._rate, config=self._config)
                 point: dict[str, float] = {"episode": self._episode}
                 point.update({key: result[key] for key in EVAL_AGG_KEYS})
@@ -116,6 +122,13 @@ class _RunLogger(BaseCallback):
         else:
             self._step += 1
         return True
+
+
+def _freeze(model: PPO, seed: int) -> None:
+    """对 model.policy 施加 D4 冻结（静态声明的 policy 类型是 SB3 基类，收窄到本项目子类）。"""
+    policy = model.policy
+    assert isinstance(policy, ActorCriticPolicy)
+    apply_freeze(policy, seed=seed)
 
 
 def _build_model(vec: VecMonitor, spec: _RunSpec, ckpts_dir: Path) -> PPO:
@@ -128,7 +141,7 @@ def _build_model(vec: VecMonitor, spec: _RunSpec, ckpts_dir: Path) -> PPO:
         # 的 mini-batch 切分上出错——加载后按目标 N 重算。
         model.batch_size = model.n_steps * vec.num_envs
         if spec.freeze:  # A3/A6：加载后冻结
-            apply_freeze(model.policy, seed=spec.seed)
+            _freeze(model, spec.seed)
             rebuild_optimizer(model)
         return model
     ppo_cfg = spec.config["ppo"]
@@ -151,7 +164,7 @@ def _build_model(vec: VecMonitor, spec: _RunSpec, ckpts_dir: Path) -> PPO:
         device=spec.device,
     )
     if spec.freeze:  # A3b：随机网络冻结
-        apply_freeze(model.policy, seed=spec.seed)
+        _freeze(model, spec.seed)
         rebuild_optimizer(model)
     return model
 
