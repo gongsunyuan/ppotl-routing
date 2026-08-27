@@ -11,12 +11,23 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
+from itertools import pairwise
 from math import copysign, inf, sqrt
 from statistics import mean, stdev
+from typing import Protocol, runtime_checkable
 
 from scipy import stats
 
 _CI_LEVEL = 0.95
+
+
+@runtime_checkable
+class _HasPValue(Protocol):
+    """scipy wilcoxon 经 _axis_nan_policy_factory 装饰后静态返回类型被擦除（类型检查器见 `_`）；
+    以结构协议锚定结果对象的 .pvalue 契约（WilcoxonResult namedtuple 的既有字段），
+    isinstance（runtime_checkable → hasattr 检查）在静态与运行时两侧都成立。"""
+
+    pvalue: float
 
 
 def time_to_threshold(
@@ -37,7 +48,7 @@ def time_to_threshold(
         raise ValueError("window 须为正")
     if values[0] >= theta:
         return float(episodes[0]), False
-    for (e_i, v_i), (e_j, v_j) in zip(zip(episodes, values), zip(episodes[1:], values[1:])):
+    for (e_i, v_i), (e_j, v_j) in pairwise(zip(episodes, values)):
         if e_i > window:
             break
         if v_j < theta:
@@ -73,7 +84,7 @@ def window_auc(episodes: Sequence[int], values: Sequence[float], window: int) ->
     elif points[-1][0] < window:  # 曲线在 W 前结束 → LOCF
         points.append((float(window), points[-1][1]))
     integral = sum(
-        (x2 - x1) * (y1 + y2) / 2.0 for (x1, y1), (x2, y2) in zip(points, points[1:])
+        (x2 - x1) * (y1 + y2) / 2.0 for (x1, y1), (x2, y2) in pairwise(points)
     )
     return integral / window
 
@@ -131,9 +142,11 @@ def paired_tests(x: Sequence[float], y: Sequence[float]) -> dict[str, float]:
         return {"t_p": 1.0, "wilcoxon_p": 1.0, "mean_diff": 0.0, "cohens_d": 0.0}
     sd_d = stdev(diffs)
     cohens_d = copysign(inf, mean_diff) if sd_d == 0.0 else mean_diff / sd_d
+    wilcoxon_res = stats.wilcoxon(x, y)
+    assert isinstance(wilcoxon_res, _HasPValue)
     return {
         "t_p": float(stats.ttest_rel(x, y).pvalue),
-        "wilcoxon_p": float(stats.wilcoxon(x, y).pvalue),
+        "wilcoxon_p": float(wilcoxon_res.pvalue),
         "mean_diff": mean_diff,
         "cohens_d": cohens_d,
     }

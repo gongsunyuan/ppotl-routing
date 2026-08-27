@@ -10,6 +10,7 @@ runs_smoke 数据优先，缺则合成 runs 目录 fixture——8 臂 + OSPF/ECM
 from __future__ import annotations
 
 import json
+from itertools import pairwise
 from pathlib import Path
 from typing import Any
 
@@ -91,7 +92,7 @@ def test_compute_stats_holm_monotone_nondecreasing() -> None:
     assert all(pair["seeds"] == [0, 1] and len(pair["diffs"]) == 2 for pair in stats)
     assert all(pair["holm_p"] >= pair["t_p"] - 1e-12 for pair in stats)
     ordered = [pair["holm_p"] for pair in sorted(stats, key=lambda p: p["t_p"])]
-    assert all(later >= earlier for earlier, later in zip(ordered, ordered[1:]))
+    assert all(later >= earlier for earlier, later in pairwise(ordered))
 
 
 def _synthetic_runs(runs: Path) -> None:
