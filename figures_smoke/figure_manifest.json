@@ -1,0 +1,28 @@
+{
+  "created_at": "2026-08-26T16:04:10.511720+00:00",
+  "runs": "C:\\Users\\10850\\Desktop\\mdpi\\experiments\\runs_smoke",
+  "out": "C:\\Users\\10850\\Desktop\\mdpi\\experiments\\figures_smoke",
+  "normalization": "per-(topo,rate) max of r_mean_mean across all runs (MDPI tex:475)",
+  "denominators": {
+    "Abilene.gml@500": 0.7852618181818182,
+    "CERNET.gml@500": 0.36035414634146345
+  },
+  "prereg": {
+    "theta": null,
+    "window_episodes": 500,
+    "asymptote_k": 5,
+    "alpha": 0.05,
+    "primary_metric": "tau"
+  },
+  "figures": [
+    "adaptation_curves.png",
+    "adaptation_curves.pdf",
+    "asymptote_bars.png",
+    "asymptote_bars.pdf"
+  ],
+  "stats_files": [
+    "stats.json",
+    "stats.csv"
+  ],
+  "n_runs": 34
+}

@@ -1,0 +1,125 @@
+{
+  "arm": "ECMP",
+  "config": {
+    "adapt": {
+      "episodes": 10
+    },
+    "env": {
+      "K": 3,
+      "alpha_plr": 0.7,
+      "beta_delay": 0.3,
+      "capacity": 10000,
+      "episode_steps": 50,
+      "max_nodes": 41,
+      "mu": [
+        1000,
+        2000,
+        3000
+      ],
+      "reward_mix": {
+        "global": 0.4,
+        "local": 0.6
+      }
+    },
+    "eval": {
+      "deterministic": true,
+      "eval_episodes": 5,
+      "eval_interval": 5,
+      "eval_seed_base": 10000,
+      "heuristic_episodes": 10,
+      "ospf_action": 0
+    },
+    "freeze": {
+      "critic_trainable": true,
+      "frozen_layers": [
+        "actor.0",
+        "actor.1",
+        "actor.2",
+        "actor.3"
+      ],
+      "reinit_head": true
+    },
+    "net": {
+      "activation": "PReLU",
+      "init": "kaiming_normal_",
+      "layers": [
+        287,
+        128,
+        64
+      ],
+      "separate_pi_vf": true
+    },
+    "paths": {
+      "ckpts_dir": "ckpts_smoke",
+      "runs_dir": "runs_smoke"
+    },
+    "ppo": {
+      "batch_size": null,
+      "clip_range": 0.2,
+      "ent_coef": 0.05,
+      "gae_lambda": 1.0,
+      "gamma": 0.99,
+      "learning_rate": 6e-06,
+      "n_epochs": 10,
+      "n_steps": 50,
+      "normalize_advantage": true
+    },
+    "pretrain": {
+      "avgrate": 500,
+      "episodes": 20,
+      "topology": "CERNET.gml"
+    },
+    "scenarios": [
+      {
+        "avgrate": 500,
+        "topo": "CERNET_failure.gml"
+      },
+      {
+        "avgrate": 500,
+        "topo": "Abilene.gml"
+      },
+      {
+        "avgrate": 500,
+        "topo": "NFSCNET.gml"
+      },
+      {
+        "avgrate": 1500,
+        "topo": "CERNET.gml"
+      }
+    ],
+    "seeds": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9
+    ]
+  },
+  "created_at": "2026-08-26T15:17:43.925764+00:00",
+  "device": "cpu",
+  "episodes": 10,
+  "factors": {
+    "freeze": false,
+    "pbrs": false,
+    "pretrain": false
+  },
+  "git_hash": null,
+  "git_hash_note": "无 git 仓库",
+  "rate": 500,
+  "requirements_lock": "# requirements.lock — trl-sb3-ablation experiments package\n# Direct dependencies, all pinned with exact `==`. Do not use >=/<=/~=/ *.\n# Changing any version requires editing this file first, then reinstalling.\n#\n# Full reproduction sequence (Windows PowerShell, uv 0.12.5+):\n#   cd C:\\Users\\10850\\Desktop\\mdpi\\experiments\n#   uv venv --python 3.13 .venv\n#   uv pip install \"torch==2.13.0+cu126\" --index-url https://download.pytorch.org/whl/cu126 --python .venv\\Scripts\\python.exe\n#   uv pip install \"stable-baselines3==2.7.0\" \"gymnasium==1.2.0\" \"networkx==3.4.2\" `\n#     \"pyyaml==6.0.2\" \"numpy==2.2.6\" \"pytest==8.3.5\" \"matplotlib==3.10.9\" \"scipy==1.15.3\" `\n#     --python .venv\\Scripts\\python.exe\n#   uv pip check --python .venv\\Scripts\\python.exe\n# Transitive deps (filelock, sympy, pandas, pillow, ...) are resolver-chosen, not listed here.\n\ntorch==2.13.0+cu126  # --index-url https://download.pytorch.org/whl/cu126\nstable-baselines3==2.7.0\ngymnasium==1.2.0\nnetworkx==3.4.2\npyyaml==6.0.2\nnumpy==2.2.6\npytest==8.3.5\nmatplotlib==3.10.9\nscipy==1.15.3\n",
+  "run_id": "ECMP-7ebe62dbcb",
+  "seed": 0,
+  "source_run_id": null,
+  "topo": "Abilene.gml",
+  "versions": {
+    "networkx": "3.4.2",
+    "numpy": "2.2.6",
+    "sb3": "2.7.0",
+    "torch": "2.13.0+cu126"
+  }
+}
