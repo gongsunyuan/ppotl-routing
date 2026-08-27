@@ -3,7 +3,10 @@ truncated 时刻 / info 键 / 邻居升序 / k_paths 稳定 / _add_flows 比例�
 
 from __future__ import annotations
 
+from typing import Any
+
 import numpy as np
+import numpy.typing as npt
 
 from trl_sb3.common.config import resolve_path
 from trl_sb3.env.routing_env import RoutingEnv
@@ -18,13 +21,13 @@ def _make_env(topology: str, pbrs: bool = True, seed: int = 7) -> RoutingEnv:
     return RoutingEnv(resolve_path(f"topologies/{topology}"), avgrate=500, pbrs=pbrs, seed=seed)
 
 
-def _fixed_actions(n: int) -> np.ndarray:
+def _fixed_actions(n: int) -> npt.NDArray[np.int64]:
     """固定动作序列由独立 rng 生成（不依赖 env rng）。"""
     rng = np.random.default_rng(12345)
     return rng.integers(0, 3, size=(STEPS, n))
 
 
-def _assert_info_equal(info_a: dict, info_b: dict) -> None:
+def _assert_info_equal(info_a: dict[str, Any], info_b: dict[str, Any]) -> None:
     """info 键齐全且逐位相等（数组含 dtype）。"""
     assert set(info_a) == INFO_KEYS
     for key in sorted(INFO_KEYS):
@@ -106,7 +109,7 @@ def test_add_flows_proportion_seam() -> None:
     env.reset()
     split = np.zeros((env._n, 3))
     for i in range(env._n):
-        for k in range(len(env._flow_paths[i])):
+        for k in range(len(env._paths()[i])):
             split[i, k] = (0.5, 0.3, 0.2)[k]
     env._add_flows(split)
     reward = env._get_reward(split)

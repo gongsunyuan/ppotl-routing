@@ -13,6 +13,7 @@ pbrs=True/False 同 seed 同动作的轨迹自第 2 步起分歧（非移植 bug
 from __future__ import annotations
 
 import numpy as np
+import numpy.typing as npt
 import pytest
 
 from trl_sb3.common.config import resolve_path
@@ -27,21 +28,21 @@ def _make_env(topology: str, pbrs: bool, seed: int = 7) -> RoutingEnv:
     return RoutingEnv(resolve_path(f"topologies/{topology}"), avgrate=500, pbrs=pbrs, seed=seed)
 
 
-def _fixed_actions(n: int) -> np.ndarray:
+def _fixed_actions(n: int) -> npt.NDArray[np.int64]:
     """固定动作序列由独立 rng 生成（不依赖 env rng，沿用 test_env_determinism 写法）。"""
     rng = np.random.default_rng(12345)
     return rng.integers(0, 3, size=(STEPS, n))
 
 
 def _rollout(
-    env: RoutingEnv, actions: np.ndarray
-) -> tuple[list[np.ndarray], list[np.ndarray], list[np.ndarray]]:
+    env: RoutingEnv, actions: npt.NDArray[np.int64]
+) -> tuple[list[npt.NDArray[np.float64]], list[npt.NDArray[np.float64]], list[npt.NDArray[np.float64]]]:
     """reset 后跑满 STEPS 步，返回 (obs 序列, reward_local 序列, G 序列)；G 由 info 的 rd/rp 现算。"""
     beta, alpha = env._beta_delay, env._alpha_plr
     env.reset()
-    obs_seq: list[np.ndarray] = []
-    local_seq: list[np.ndarray] = []
-    g_seq: list[np.ndarray] = []
+    obs_seq: list[npt.NDArray[np.float64]] = []
+    local_seq: list[npt.NDArray[np.float64]] = []
+    g_seq: list[npt.NDArray[np.float64]] = []
     for t in range(STEPS):
         obs, _, _, _, info = env.step(actions[t])
         obs_seq.append(obs)

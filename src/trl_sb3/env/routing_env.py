@@ -20,6 +20,7 @@ from typing import Any, NamedTuple
 import gymnasium as gym
 import networkx as nx
 import numpy as np
+import numpy.typing as npt
 
 from trl_sb3.env.mmk import mmk_delay, mmk_loss
 from trl_sb3.env.topology import k_shortest_paths, load_topology
@@ -31,17 +32,19 @@ ZIP_PROB: tuple[float, float, float] = (0.6, 0.3, 0.1)
 class _StepReward(NamedTuple):
     """_get_reward 输出：每节点 local/total 与本步 r_d/r_p，及均值 r_mean。"""
 
-    local: np.ndarray
-    total: np.ndarray
+    local: npt.NDArray[np.float64]
+    total: npt.NDArray[np.float64]
     r_mean: float
-    rd: np.ndarray
-    rp: np.ndarray
+    rd: npt.NDArray[np.float64]
+    rp: npt.NDArray[np.float64]
 
 
-class RoutingEnv(gym.Env):
-    """节点扇出多智能体路由环境：每节点 7*max_nodes 维观测、Discrete(n_candidates) 动作。"""
+class RoutingEnv(gym.Env[npt.NDArray[np.float64], np.int64]):
+    """节点扇出多智能体路由环境：每节点 7*max_nodes 维观测、Discrete(n_candidates) 动作。
 
-    metadata = {"render_modes": []}
+    metadata 不覆写：与 gym.Env 默认 {"render_modes": []} 完全一致，直接继承。
+    ActType=np.int64（per-node Discrete 口径）；D2 节点扇出下 step 实收全节点
+    动作向量 (N,)——形参取 int | 向量 并集以同时满足 gym 覆写与扇出调用方。"""
 
     def __init__(
         self,
@@ -127,9 +130,16 @@ class RoutingEnv(gym.Env):
             self._k_path_cache[(src, dst)] = cached
         return cached
 
+    def _paths(self) -> list[list[list[int]]]:
+        """_flow_paths 的非 None 视图：k_paths 在首次 reset() 惰性初始化（docstring 见 reset），
+        本方法及全部消费方（step 链/启发式 seam）只在 reset 之后调用——gym 契约保证。"""
+        flow_paths = self._flow_paths
+        assert flow_paths is not None, "step 链只能在 reset() 之后调用（k_paths 惰性初始化）"
+        return flow_paths
+
     def reset(
         self, *, seed: int | None = None, options: dict[str, Any] | None = None
-    ) -> tuple[np.ndarray, dict[str, Any]]:
+    ) -> tuple[npt.NDArray[np.float64], dict[str, Any]]:
         """重置回合（legacy routingEnv.py:153-208）：Φ(s0)=0、速率扰动、k_paths 惰性。"""
         if seed is not None:
             self._rng = np.random.default_rng(seed)
@@ -159,11 +169,12 @@ class RoutingEnv(gym.Env):
         }
         return self._build_state(), info
 
-    def _build_state(self) -> np.ndarray:
+    def _build_state(self) -> npt.NDArray[np.float64]:
         """(N, 7*max_nodes) 观测（legacy routingEnv.py:372-423）：own 7 维+邻居升序+零填。"""
+        flow_paths = self._paths()
         feats = np.zeros((self._n, 7))
         for i in range(self._n):
-            paths = self._flow_paths[i]
+            paths = flow_paths[i]
             feats[i, 0] = round(self._dst[i] / self._n, 2)  # Python round（银行家舍入）
             feats[i, 1] = round(self._rates[i] / self._avgrate, 2)
             for j in range(3):
@@ -176,9 +187,13 @@ class RoutingEnv(gym.Env):
                 state[v, 7 * slot : 7 * slot + 7] = feats[node]
         return state
 
-    def step(self, actions: np.ndarray) -> tuple[np.ndarray, float, bool, bool, dict[str, Any]]:
-        """一步（legacy routingEnv.py:452-464）：add_flows→reward→th 先算后存→change→state。"""
-        actions = np.asarray(actions, dtype=np.int64)
+    def step(
+        self, action: np.int64 | npt.NDArray[np.int64]
+    ) -> tuple[npt.NDArray[np.float64], float, bool, bool, dict[str, Any]]:
+        """一步（legacy routingEnv.py:452-464）：add_flows→reward→th 先算后存→change→state。
+
+        action 为全节点动作向量 (N,)（D2 节点扇出语义）；形参名对齐 gym.Env.step。"""
+        actions = np.asarray(action, dtype=np.int64)
         split = np.zeros((self._n, self._n_candidates))
         split[np.arange(self._n), actions] = 1.0
         self._add_flows(split)
@@ -198,18 +213,19 @@ class RoutingEnv(gym.Env):
         }
         return obs, reward.r_mean, False, truncated, info
 
-    def _add_flows(self, split: np.ndarray) -> None:
+    def _add_flows(self, split: npt.NDArray[np.float64]) -> None:
         """注入流量并传播（legacy routingEnv.py:210-266 的 dict 语义）。
 
         分流缝：split 为 (N, n_candidates) 任意非负比例矩阵（行和无需为 1），
         step 的 one-hot 是其特例——M2.5 比例向量直接走此入口。
         quirk：out_rate 首录胜出（setdefault，记 issues）。
         """
-        in_rate: list[dict[int, float]] = [dict() for _ in range(self._n)]
-        reminder: list[dict[int, int]] = [dict() for _ in range(self._n)]
-        out_rate: list[dict[int, float]] = [dict() for _ in range(self._n)]
+        flow_paths = self._paths()
+        in_rate: list[dict[int, float]] = [{} for _ in range(self._n)]
+        reminder: list[dict[int, int]] = [{} for _ in range(self._n)]
+        out_rate: list[dict[int, float]] = [{} for _ in range(self._n)]
         for i in range(self._n):
-            for k, path in enumerate(self._flow_paths[i]):
+            for k, path in enumerate(flow_paths[i]):
                 key = i * self._n_candidates + k
                 in_rate[path[0]][key] = float(self._rates[i] * split[i, k])
                 for pos, node in enumerate(path):
@@ -229,7 +245,7 @@ class RoutingEnv(gym.Env):
         self._in_rate = in_rate
         self._out_rate = out_rate
 
-    def _get_reward(self, split: np.ndarray) -> _StepReward:
+    def _get_reward(self, split: npt.NDArray[np.float64]) -> _StepReward:
         """奖励（legacy routingEnv.py:267-371）。
 
         quirks（均记 issues）：路径时延的 μ 取 flow 源节点（非路径节点 p）；
@@ -237,6 +253,7 @@ class RoutingEnv(gym.Env):
         PBRS：local = r_base + gamma*G_cur − G_prev，G_prev = beta*last_rd+alpha*last_rp
         （reset 归零 → Φ(s0)=0，与 legacy 跨回合残留不同）。
         """
+        flow_paths = self._paths()
         local = np.zeros(self._n)
         rd_new = np.zeros(self._n)
         rp_new = np.zeros(self._n)
@@ -245,7 +262,7 @@ class RoutingEnv(gym.Env):
             mu_src = float(self._mu[i])
             path_delay = 0.0
             ava = 0.0
-            for k, path in enumerate(self._flow_paths[i]):
+            for k, path in enumerate(flow_paths[i]):
                 rate_k = rate * split[i, k]
                 if rate_k == 0.0:
                     continue
@@ -276,7 +293,7 @@ class RoutingEnv(gym.Env):
         )
         return _StepReward(local, total, float(total.mean()), rd_new, rp_new)
 
-    def _change_flows(self, total: np.ndarray) -> None:
+    def _change_flows(self, total: npt.NDArray[np.float64]) -> None:
         """按 total 稳定升序调节半数流速率 ±change_flow_pct（legacy routingEnv.py:466-481）。"""
         for rank, node in enumerate(np.argsort(total, kind="stable")):
             factor = 1.0 - self._change_flow_pct if rank <= self._n / 2 else 1.0 + self._change_flow_pct
