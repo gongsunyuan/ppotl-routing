@@ -1,0 +1,16 @@
+# config/grid_smoke.yaml — 冒烟实验网格（用户 2026-08-26 裁决：本机只跑冒烟，全量在更强机器）
+# 结构与 grid_pilot.yaml 完全同构，仅预算缩到分钟级；产物落 runs_smoke/ckpts_smoke
+# （由 default.yaml paths 临时指向，跑完即还原——run_id 不含 episodes 因素，
+#  冒烟与全量必须隔离目录，否则好机器上 DONE 跳过会吞掉真实 run）。
+pretrain:
+  seeds: [0, 1, 2]
+  episodes: 20            # 冒烟：仅验证管线（CUDA ~17s/seed）
+arms: [A1, A1b, A2, A3, A3b, A4, A5, A6]
+scenarios:
+  - {topo: Abilene.gml, avgrate: 500}
+seeds: [0, 1, 2]
+adapt_episodes: 10        # 冒烟：每臂 ~4s；A1b = 20+10=30
+a1b_budget_rule: pretrain + adapt
+zeroshot: true
+ospf: true
+heuristic: [ECMP, LB, RR]

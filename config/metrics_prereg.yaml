@@ -1,0 +1,30 @@
+# config/metrics_prereg.yaml — 指标预注册骨架（M3，计划 §5 指标三元组/统计）。
+# 防事后择优：θ/W/k/α 跑主表前钉死于此；指标（eval/metrics.py）与聚合器
+# （run/aggregate.py）按本文件取值，代码不硬编码。theta=null = 尚未预注册，
+# 聚合暂按 theta_rule 推导口径；试点后回填定值（此后不得再改）。
+
+# —— threshold（τ 绝对阈值 θ，计划 §5-1）——
+# 试点后回填定值 float；null = 未预注册，聚合按 theta_rule 推导
+theta: null
+# θ 推导规则（计划 §5-1）：逐 (topo, rate) 场景取
+#   θ = max(OSPF 贪心分, 最优臂渐近 − 合并组内 σ)
+# OSPF 贪心分 = OSPF 行 eval.json final.r_mean_mean；最优臂渐近 = 学习臂种子内
+# 末 asymptote_k 点渐近均值的最大者；合并 σ = 学习臂间 pooled-within-SD
+theta_rule: "max(OSPF final r_mean_mean, best-arm asymptote mean - pooled within-arm SD), per (topo, rate)"
+
+# τ 删失窗口 W（回合数，计划 §5-1/§5-2）：曲线窗口末仍未过阈 → τ=W、
+# censored=true；同时是 W-AUC 的积分窗口（梯形积分 ÷ W）
+window_episodes: 500
+
+# 渐近性能（计划 §5-3）：末 k=5 个评估点均值 ±95%CI（t 分布，n=k；契约 k≥2）
+asymptote_k: 5
+
+# 显著性水平（计划 §5 统计）：配对 t / Wilcoxon 逐对检验 + Holm 族校正
+alpha: 0.05
+
+# 主指标（计划 §5-1）：τ 为主结论依据，W-AUC/渐近为次指标
+primary_metric: tau
+
+# 主表终评回合数统一（issues.md M2.5/M2-4 双轨：OSPF/A0=5、启发式=10 → M3 定案）。
+# null = 未定；定案后基线行 eval episodes 对齐该值（arms 周期曲线不受影响）
+final_eval_episodes: null

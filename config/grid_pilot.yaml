@@ -1,0 +1,17 @@
+# config/grid_pilot.yaml — M3 试点网格（计划 checkbox #11）：3 配对种子 × 全臂 ×
+# CERNET→Abilene。目的：指标管线端到端 + 功效校验（定终版种子数）+ 损失曲线
+# 材料（双 lr 裁决）。预算字段 null = 沿用 default.yaml 缺省值参与规划，
+# orchestrator 计时校准后改定（本文件是试点唯一预算出处，勿改 default.yaml）。
+pretrain:
+  seeds: [0, 1, 2]         # 配对设计：seed s → 源 C_s → A2/A3/A5/A6/A0 同源（§5）
+  episodes: 8000           # 2026-08-26 orchestrator 定案：全规模（CUDA 实测 0.83 s/ep → 1.84h/seed；
+                           # 双 lr 裁决需真实规模损失曲线，θ 推导与 M4 同尺度）；3 seed 并行跑
+arms: [A1, A1b, A2, A3, A3b, A4, A5, A6]  # 全 8 消融臂（§4 臂表）
+scenarios:
+  - {topo: Abilene.gml, avgrate: 500}     # 仅跨拓扑场景（计划 #11：CERNET→Abilene）
+seeds: [0, 1, 2]           # 3 配对种子（功效校验最小可行规模；§5 主表 10 种子的试点子集）
+adapt_episodes: 1000       # 2026-08-26 orchestrator 定案：全规模（CUDA Abilene 0.33 s/ep → 0.09h/run）
+a1b_budget_rule: pretrain + adapt  # A1b 等总预算 = 预训练 + 适应（§4；sweep 缺省即此规则，显式留档）
+zeroshot: true             # A0 零样本行（源 = 同 seed 预训练；每场景 × 每种子）
+ospf: true                 # OSPF 基线行（每场景 1 行；run_id 无 seed 因素，恒 seed=0）
+heuristic: [ECMP, LB, RR]  # 启发式基线行（每场景每策略 1 行；确定性分流无 seed 因素）

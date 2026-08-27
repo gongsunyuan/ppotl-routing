@@ -1,0 +1,29 @@
+# config/grid_main.yaml — 主网格（M2-4）：`python -m trl_sb3.run sweep --grid config/grid_main.yaml`
+# 自包含（不复用 default.yaml 的 scenarios/seeds 键，显式列出）；预算字段经 sweep 并入
+# config 快照（pretrain.episodes / adapt.episodes），其余超参唯一出处仍是 default.yaml。
+# 键值出处（计划 §5 主表 / §4 臂表 / 根 AGENTS.md）：
+#   pretrain.seeds    预训练种子 0..9（§5 配对设计：seed s → 源 C_s → A2/A3/A5/A6/A0 同源）
+#   pretrain.episodes 预训练回合 8000（legacy 等效，default.yaml pretrain.episodes 同值；此处显式便于单独调）
+#   arms              8 消融臂（§4；A1b 与 A1 同因子，等总预算差靠 a1b_episodes 承担，不入 run_id）
+#   scenarios         目标 4 场景（§5：F9 跨拓扑两轴 + 流量倍增轴；与 default.yaml scenarios 一致）
+#   seeds             目标域种子 0..9（= pretrain.seeds，配对设计）
+#   adapt_episodes    微调回合 1000（default.yaml adapt.episodes 缺省值；M3 试点后校准，勿逐臂重调）
+#   a1b_episodes      A1b 等总预算 = 预训练 8000 + 适应 1000 = 9000（§4 "目标域步数=预训练+适应"）
+#   zeroshot          A0 零样本行：每场景 × 每种子（源 = 同 seed 预训练），共 4×10=40 行
+#   ospf              OSPF 基线行：每场景 1 行（run_ospf_eval 的 run_id 无 seed 因素——恒 seed=0，
+#                     多种子计划会得到相同 run_id 而被幂等跳过，故每场景只计划 1 行），共 4 行
+# 计划总量：10 预训练 + 8 臂×4 场景×10 种子(=320) + 40 A0 + 4 OSPF = 374 run。
+pretrain:
+  seeds: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+  episodes: 8000
+arms: [A1, A1b, A2, A3, A3b, A4, A5, A6]
+scenarios:
+  - {topo: CERNET_failure.gml, avgrate: 500}  # ① 同拓扑链路故障
+  - {topo: Abilene.gml, avgrate: 500}         # ② 跨拓扑 11 节点
+  - {topo: NFSCNET.gml, avgrate: 500}         # ③ 跨拓扑 9 节点（论文拼写 NSFCNET，同一网络）
+  - {topo: CERNET.gml, avgrate: 1500}         # ④ 流量倍增
+seeds: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+adapt_episodes: 1000
+a1b_episodes: 9000
+zeroshot: true
+ospf: true
