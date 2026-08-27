@@ -1,81 +1,59 @@
+# config/default.yaml — 论文超参唯一出处（paper_defaults 一节）
+# 代码不得硬编码论文超参（根 AGENTS.md 约束 1）；改超参先改这里。
+# 出处标注：F#/§N/DN 指计划 .omo/plans/trl-routing-sb3-ablation.md 的已验证事实/规格/决策。
+
 paper_defaults:
-  actor_lr: 6.0e-6
-  critic_lr: 6.0e-7
-  gamma: 0.99
-  clip_eps: 0.2
-  k_epochs: 4
-  alpha1: 0.3
-  alpha2: 0.7
-  zeta1: 0.3
-  zeta2: 0.7
-  hidden_dim: 64
-  k_paths: 4
-
-network:
-  buffer_capacity: 10000
-  service_rates: [1000, 2000, 3000]
-  n_background_flows: 20
-
-traffic:
-  source_mean_rate: 750
-  varying_rates: [250, 375, 500, 750, 1000, 1500, 2000]
-  constant_rates_eval: [250, 1000, 1500, 2000]
-
-dqn:
-  lr: 1.0e-4
-  batch_size: 64
-  buffer_size: 50000
-  target_sync_steps: 1000
-  eps_start: 1.0
-  eps_end: 0.05
-  eps_decay_steps: 20000
-  hidden_dim: 64
-
-grlps:
-  embedding_dim: 8
-  lr: 1.0e-4
-  batch_size: 64
-  buffer_size: 50000
-  target_sync_steps: 1000
-  eps_start: 1.0
-  eps_end: 0.05
-  eps_decay_steps: 20000
-  hidden_dim: 64
-
-smoke:
-  seeds: [0]
-  topologies: [nsfcnet, abilene]
-  pretrain_episodes: 40
-  adapt_episodes: 30
-  eval_episodes: 3
-  horizon: 30
-  constant_rates: [250, 1000]
-  fail_ratios: [0.1]
-  sensitivity: false
-  scenarios: [S1, S2, S3, S4, A]
-
-full:
-  seeds: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
-  topologies: [abilene, cernet, claranet, nsfcnet]
-  pretrain_episodes: 600
-  adapt_episodes: 300
-  eval_episodes: 10
-  horizon: 200
-  constant_rates: [250, 1000, 1500, 2000]
-  fail_ratios: [0.1, 0.2, 0.3]
-  sensitivity: true
-  scenarios: [S1, S2, S3, S4, A, H]
-
-sensitivity:
-  k_paths: [2, 4, 8, 16]
-  freeze_fraction: [0.0, 0.25, 0.5, 0.75, 1.0]
-  zeta1: [0.0, 0.3, 0.5, 0.7, 1.0]
-  alpha1: [0.0, 0.3, 0.5, 0.7, 1.0]
-  topo: cernet
-
-gpu:
-  n_vec_envs: 0          # 0 = auto from free VRAM (128/256/512)
-  minibatch: 4096
-  procs_per_gpu: 1
-  tf32: true
-  ensemble: true
+  env:
+    K: 3                    # 候选路径数；每步每节点 one-hot 选一（F1）
+    max_nodes: 41           # 观测固定 7*41=287 维零填充；41=CERNET 节点数（F8/D1）
+    capacity: 10000         # M/M/1/K 排队的 K（F11/§3）
+    mu: [1000, 2000, 3000]  # 链路服务率集合 μ（F11）
+    alpha_plr: 0.7          # packetloss 权重，对齐论文 ζ2=0.7；legacy gen.py a=3 差异记 DEVIATIONS #9（§3/D8）
+    beta_delay: 0.3         # delay 权重，对齐论文 ζ1=0.3（§3）
+    reward_mix:
+      local: 0.6            # 局部（PBRS 势差）奖励权重（F3）
+      global: 0.4           # 速率加权全局奖励权重（F3）
+    episode_steps: 50       # 回合步数；第 50 步 truncated=True（F13/D1 修 F5）
+    # 归一化常数沿用 legacy 固定式（D1，不引入 warm-up 估计）：
+    #   norm = node_num * capacity / avgrate / 2000
+  ppo:
+    n_steps: 50             # rollout 长度 = 回合步数（D2）
+    n_epochs: 10            # K_epochs（F13）
+    batch_size: null        # = 50·N 整批；由 runner 按拓扑节点数计算（D2）
+    gamma: 0.99             # 论文值；legacy 因 F5 bug 从未生效，本实现经 truncated bootstrap 真正生效（DEVIATIONS #1）
+    gae_lambda: 1.0         # =MC 回报优势，最贴 legacy（D2）
+    clip_range: 0.2         # eps_clip（F13）
+    ent_coef: 0.05          # 实际步进的熵系数；legacy main.py:257 的 0.01 是死变量（F12）
+    learning_rate: 6.0e-6   # 单 Adam lr；弃 legacy 双 lr（10x）与 actor wd=1e-4（D3/DEVIATIONS #3）
+    normalize_advantage: true  # D2
+  net:
+    layers: [287, 128, 64]  # actor/critic 躯干隐层；输入 7*41=287，输出头 Linear(64,3)（F2/D3）
+    activation: PReLU       # F2
+    init: kaiming_normal_   # fan_out 模式、nonlinearity=relu（F2/D3）
+    separate_pi_vf: true    # pi/vf 完全独立两网，不用 SB3 默认 MlpExtractor（D3）
+  freeze:                   # arm3/6 冻结语义（D4；按 F7 死注释意图新定义，legacy 从未运行过部分冻结）
+    frozen_layers: [actor.0, actor.1, actor.2, actor.3]  # 躯干冻结清单：Linear(287,128)、两 PReLU、Linear(128,64)（D4/F7：除输出头外全冻结）
+    reinit_head: true       # 输出头 Linear(64,3) 先 kaiming 重初始化再可训练（F7）
+    critic_trainable: true  # critic 全部可训练（F7）
+  eval:
+    deterministic: true     # 贪心评估（D8）
+    eval_seed_base: 10000   # 固定评估回合流 seed = 10000 + i（D8）
+    eval_episodes: 5        # 评估回合数（D8）
+    eval_interval: 100      # 训练中周期评估间隔（回合数），M3 可调（§5 曲线采样密度）
+    ospf_action: 0          # OSPF 基线 = 全节点 action 0；legacy 注释 "hop count" 有误，实为 Σ1/μ 权重 k-最短首路径（F10/DEVIATIONS #8）
+    heuristic_episodes: 10  # 启发式基线（ECMP/LB/RR）评估回合数（§5 十评估种子协议，M2.5；与 OSPF/A0 的 eval_episodes=5 区分）
+  adapt:
+    episodes: 1000          # 微调回合数（§5 主表适应预算；M3 校准，勿逐臂重调）
+  pretrain:
+    topology: CERNET.gml    # 预训练源拓扑（41 节点，F8/F9/D5）
+    avgrate: 500            # 源域平均速率（§5 主表）
+    episodes: 8000          # ≈legacy 等效回合数；M0 实测单步成本后校准（§5）
+  scenarios:                # 目标场景 4 条（§5：F9 两轴 + 流量变化轴）
+    - {topo: CERNET_failure.gml, avgrate: 500}  # ① 同拓扑链路故障
+    - {topo: Abilene.gml, avgrate: 500}         # ② 跨拓扑 11 节点
+    - {topo: NFSCNET.gml, avgrate: 500}         # ③ 跨拓扑 9 节点（图上标签沿用论文拼写 NSFCNET）
+    - {topo: CERNET.gml, avgrate: 1500}         # ④ 流量倍增（新增强化"动态流量"主张）
+  seeds: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]  # 配对设计 10 种子占位；M3 功效校验后或上调（§5）
+  paths:                    # 产物目录（M2-3 runner；resolve_path 锚定 experiments/ 包根，与 cwd 无关）
+    runs_dir: runs          # 每 run 一个子目录：metrics.csv/eval.json/manifest.json/DONE|FAILED（§6 产物契约）
+    ckpts_dir: ckpts        # PPO ckpt：<run_id>.zip；迁移臂按 manifest.source_run_id 从此加载（§6 lineage）
