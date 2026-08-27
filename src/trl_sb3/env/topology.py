@@ -7,12 +7,19 @@ adjacency_matrix → DiGraph 坍缩、nx.diameter、neighbors）、134-146（k_p
 
 from __future__ import annotations
 
+from itertools import pairwise
 from pathlib import Path
+from typing import TYPE_CHECKING, Any
 
 import networkx as nx
 
+# 节点 id 0..N-1，节点/边属性均为 dict（weight 等运行期写入）。networkx 的泛型参数
+# 仅供类型检查器（TYPE_CHECKING 下声明），运行时不可下标——别名同样只静态存在。
+if TYPE_CHECKING:
+    _DiGraph = nx.DiGraph[int, dict[str, Any], dict[str, Any]]
 
-def load_topology(gml_path: str | Path) -> nx.DiGraph:
+
+def load_topology(gml_path: str | Path) -> _DiGraph:
     """逐字复刻 legacy 图构建（routingEnv.py:32-36）。
 
     read_gml 节点 id 为 int 0..N-1（CERNET.gml 北京-西安平行边可能使 read_gml
@@ -25,7 +32,7 @@ def load_topology(gml_path: str | Path) -> nx.DiGraph:
     return nx.DiGraph(adj)
 
 
-def k_shortest_paths(graph: nx.DiGraph, src: int, dst: int, k: int = 3) -> list[list[int]]:
+def k_shortest_paths(graph: _DiGraph, src: int, dst: int, k: int = 3) -> list[list[int]]:
     """前 k 条（整数权和, 节点字典序）最短路径（legacy routingEnv.py:134-146 稳定化版）。
 
     shortest_simple_paths(weight="weight") 按权非降 yield；收集至「已收 ≥k 且
@@ -34,7 +41,7 @@ def k_shortest_paths(graph: nx.DiGraph, src: int, dst: int, k: int = 3) -> list[
     """
     collected: list[tuple[int, tuple[int, ...]]] = []
     for path in nx.shortest_simple_paths(graph, src, dst, weight="weight"):
-        weight = sum(graph[u][v]["weight"] for u, v in zip(path, path[1:]))
+        weight = sum(graph[u][v]["weight"] for u, v in pairwise(path))
         collected.append((weight, tuple(path)))
         if len(collected) >= k and weight > sorted(w for w, _ in collected)[k - 1]:
             break
