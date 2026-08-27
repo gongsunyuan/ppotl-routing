@@ -16,10 +16,16 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+import numpy.typing as npt
 
 from trl_sb3.common.config import load_config, resolve_path
 from trl_sb3.common.envs import build_routing_env
-from trl_sb3.common.logging_utils import MetricsCSVWriter, make_run_id, run_dir, write_manifest
+from trl_sb3.common.logging_utils import (
+    MetricsCSVWriter,
+    make_run_id,
+    run_dir,
+    write_manifest,
+)
 from trl_sb3.common.run_artifacts import (
     METRICS_COLUMNS,
     build_manifest,
@@ -32,24 +38,24 @@ from trl_sb3.env.routing_env import RoutingEnv
 from trl_sb3.eval.evaluate import EVAL_AGG_KEYS
 
 # 分流策略签名：读 env 内部态（_flow_paths/_in_rate，M0-2 seam）+ 回合内步序 → (N,K) 比例矩阵。
-SplitFn = Callable[[RoutingEnv, int], np.ndarray]
+SplitFn = Callable[[RoutingEnv, int], npt.NDArray[np.float64]]
 
 
-def ecmp_split(env: RoutingEnv, step_idx: int) -> np.ndarray:
+def ecmp_split(env: RoutingEnv, step_idx: int) -> npt.NDArray[np.float64]:
     """ECMP 等分（§5）：每 flow 的全部候选路径均分 1/n_paths（step_idx 不参与）。"""
     split = np.zeros((env._n, env._n_candidates))
-    for i, paths in enumerate(env._flow_paths):
+    for i, paths in enumerate(env._paths()):
         split[i, : len(paths)] = 1.0 / len(paths)
     return split
 
 
-def lb_split(env: RoutingEnv, step_idx: int) -> np.ndarray:
+def lb_split(env: RoutingEnv, step_idx: int) -> npt.NDArray[np.float64]:
     """LB 负载反比（§5）：路径负载度量 = 上一步各路径节点总入率
     sum(_in_rate[v].values()) 之和；权重 ∝ 1/(1+load_k)，行归一化。
     fresh env 首步 _in_rate 为空 → 等权 → 退化为 ECMP（step_idx 不参与）。"""
     split = np.zeros((env._n, env._n_candidates))
     has_load = bool(env._in_rate)  # reset 不清 _in_rate：回合 2+ 首步沿用上回合尾负载（记 issues）
-    for i, paths in enumerate(env._flow_paths):
+    for i, paths in enumerate(env._paths()):
         loads = np.zeros(len(paths))
         if has_load:
             for k, path in enumerate(paths):
@@ -59,12 +65,12 @@ def lb_split(env: RoutingEnv, step_idx: int) -> np.ndarray:
     return split
 
 
-def rr_split(env: RoutingEnv, step_idx: int) -> np.ndarray:
+def rr_split(env: RoutingEnv, step_idx: int) -> npt.NDArray[np.float64]:
     """RR 轮转单路径（§5）：保持 one-hot，每步轮换候选位置 step_idx mod n_paths。
 
     无内部计数器（步序经签名注入）→ 回合内轮转恒从位置 0 起，确定性可复现。"""
     split = np.zeros((env._n, env._n_candidates))
-    for i, paths in enumerate(env._flow_paths):
+    for i, paths in enumerate(env._paths()):
         split[i, step_idx % len(paths)] = 1.0
     return split
 

@@ -14,11 +14,17 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+import numpy.typing as npt
 from stable_baselines3 import PPO
 
 from trl_sb3.common.config import load_config, resolve_path
 from trl_sb3.common.envs import build_routing_env
-from trl_sb3.common.logging_utils import MetricsCSVWriter, make_run_id, run_dir, write_manifest
+from trl_sb3.common.logging_utils import (
+    MetricsCSVWriter,
+    make_run_id,
+    run_dir,
+    write_manifest,
+)
 from trl_sb3.common.run_artifacts import (
     METRICS_COLUMNS,
     build_manifest,
@@ -28,7 +34,7 @@ from trl_sb3.common.run_artifacts import (
     write_eval_rows,
 )
 
-PolicyFn = Callable[[np.ndarray], np.ndarray]
+PolicyFn = Callable[[npt.NDArray[np.float64]], npt.NDArray[np.int64]]
 # 聚合键：eval.json final / 曲线点共用的四元组。
 EVAL_AGG_KEYS: tuple[str, ...] = ("r_mean_mean", "rd_mean", "rp_mean", "th_mean")
 
@@ -37,9 +43,9 @@ def ppo_policy(model: PPO) -> PolicyFn:
     """把 SB3 模型包成 PolicyFn；deterministic 读 config eval.deterministic（D8 贪心）。"""
     deterministic = bool(load_config()["eval"]["deterministic"])
 
-    def _predict(obs: np.ndarray) -> np.ndarray:
+    def _predict(obs: npt.NDArray[np.float64]) -> npt.NDArray[np.int64]:
         actions, _ = model.predict(obs, deterministic=deterministic)
-        return np.asarray(actions)
+        return np.asarray(actions, dtype=np.int64)
 
     return _predict
 

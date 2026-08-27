@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+import numpy.typing as npt
 import pytest
 
 from trl_sb3.common.config import load_config, merge
@@ -42,7 +43,7 @@ def _fresh_env() -> RoutingEnv:
     return env
 
 
-def _assert_split_contract(split: np.ndarray, env: RoutingEnv) -> None:
+def _assert_split_contract(split: npt.NDArray[np.float64], env: RoutingEnv) -> None:
     assert split.shape == (env._n, env._n_candidates)
     assert np.all(split >= 0.0)
     assert np.allclose(split.sum(axis=1), 1.0)
@@ -74,7 +75,7 @@ def test_rr_rotates_onehot_position_per_step() -> None:
         split = rr_split(env, step)
         assert np.allclose(split.sum(axis=1), 1.0)
         assert np.allclose(split.max(axis=1), 1.0)
-        for i, paths in enumerate(env._flow_paths):
+        for i, paths in enumerate(env._paths()):
             assert int(split[i].argmax()) == step % len(paths)
 
 

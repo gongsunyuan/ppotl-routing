@@ -10,12 +10,13 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+import numpy.typing as npt
 
 from trl_sb3.common.config import load_config
 from trl_sb3.eval.evaluate import run_eval_only
 
 
-def ospf_policy(obs_batch: np.ndarray) -> np.ndarray:
+def ospf_policy(obs_batch: npt.NDArray[np.float64]) -> npt.NDArray[np.int64]:
     """全节点恒 action=config eval.ospf_action（F10；不读观测，形状对齐即可）。"""
     action = int(load_config()["eval"]["ospf_action"])
     return np.full(len(obs_batch), action, dtype=np.int64)
