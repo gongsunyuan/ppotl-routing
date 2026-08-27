@@ -12,11 +12,12 @@ from __future__ import annotations
 from typing import Any
 
 import numpy as np
+import numpy.typing as npt
 import pytest
 import torch as th
 from stable_baselines3 import PPO
 from stable_baselines3.common.torch_layers import MlpExtractor
-from stable_baselines3.common.vec_env import VecMonitor
+from stable_baselines3.common.vec_env import VecEnv, VecMonitor
 
 from trl_sb3.common.config import resolve_path
 from trl_sb3.env.node_fan_vec import NodeFanVecEnv
@@ -37,7 +38,7 @@ def _make_vec(topo: str, seed: int) -> NodeFanVecEnv:
     return NodeFanVecEnv(env)
 
 
-def _ppo(vec: NodeFanVecEnv, *, n_steps: int = 50, batch_size: int = 550, n_epochs: int = 10) -> PPO:
+def _ppo(vec: VecEnv, *, n_steps: int = 50, batch_size: int = 550, n_epochs: int = 10) -> PPO:
     """冒烟超参在测试内显式传（论文口径见 config/default.yaml ppo 节）。"""
     return PPO(
         policy=ActorCriticPolicy,
@@ -57,7 +58,7 @@ def _ppo(vec: NodeFanVecEnv, *, n_steps: int = 50, batch_size: int = 550, n_epoc
     )
 
 
-def _fixed_actions(n: int, steps: int = STEPS) -> np.ndarray:
+def _fixed_actions(n: int, steps: int = STEPS) -> npt.NDArray[np.int64]:
     rng = np.random.default_rng(12345)
     return rng.integers(0, 3, size=(steps, n))
 
@@ -114,7 +115,8 @@ def test_ppo_learn_smoke_cpu() -> None:
     obs = th.as_tensor(vec.reset())
     actions = th.zeros(N_ABILENE, dtype=th.int64)
     values, log_prob, entropy = model.policy.evaluate_actions(obs, actions)
-    for tensor in (values, log_prob, entropy):
+    for tensor in (values, log_prob, entropy):  # entropy: Tensor | None（evaluate_actions 口径）
+        assert tensor is not None
         assert th.isfinite(tensor).all()
     vec.close()
 
@@ -145,6 +147,7 @@ def test_cross_topology_ckpt_portable(tmp_path: Any) -> None:
     vec_abilene = _make_vec("Abilene.gml", SEED)
     reloaded = PPO.load(path, device="cpu")
     obs = vec_abilene.reset()
+    assert isinstance(obs, np.ndarray)
     assert obs.shape == (N_ABILENE, OBS_DIM)
     actions, _ = reloaded.predict(obs, deterministic=True)
     assert actions.shape == (N_ABILENE,)
@@ -181,6 +184,7 @@ def test_predict_deterministic_discrete_actions() -> None:
     vec = _make_vec("Abilene.gml", SEED)
     model = _ppo(vec)
     obs = vec.reset()
+    assert isinstance(obs, np.ndarray)
     actions, _ = model.predict(obs, deterministic=True)
     assert actions.shape == (N_ABILENE,)
     assert actions.dtype.kind == "i"

@@ -26,11 +26,11 @@ from __future__ import annotations
 
 from typing import Any
 
-import torch.nn as nn
+import torch as th
 from gymnasium import spaces
 from stable_baselines3.common.policies import ActorCriticPolicy as SB3ActorCriticPolicy
 from stable_baselines3.common.type_aliases import Schedule
-from torch import Tensor
+from torch import Tensor, nn
 
 from trl_sb3.common.config import load_config
 from trl_sb3.policy.nets import build_nets
@@ -44,8 +44,13 @@ class SeparatePiVfNets(nn.Module):
         super().__init__()
         self.actor = actor
         self.critic = critic
-        self.latent_dim_pi = int(actor[-1].out_features)
-        self.latent_dim_vf = int(critic[-1].out_features)
+        # Sequential.__getitem__ 静态返回 Sequential | Module（torch 2.13 stub），
+        # out_features 只在头上——isinstance 收窄到 Linear 后取值。
+        actor_head = actor[-1]
+        critic_head = critic[-1]
+        assert isinstance(actor_head, nn.Linear) and isinstance(critic_head, nn.Linear)
+        self.latent_dim_pi = actor_head.out_features
+        self.latent_dim_vf = critic_head.out_features
 
     def forward(self, features: Tensor) -> tuple[Tensor, Tensor]:
         return self.forward_actor(features), self.forward_critic(features)
@@ -71,8 +76,8 @@ class ActorCriticPolicy(SB3ActorCriticPolicy):
 
     def __init__(
         self,
-        observation_space: spaces.Space,
-        action_space: spaces.Space,
+        observation_space: spaces.Space[Any],
+        action_space: spaces.Space[Any],
         lr_schedule: Schedule,
         *args: Any,
         **kwargs: Any,
@@ -86,15 +91,14 @@ class ActorCriticPolicy(SB3ActorCriticPolicy):
         头维 = 类别数（get_action_dim 对 Discrete 返回动作向量维 1，此处不适用）。"""
         assert isinstance(self.action_space, spaces.Discrete), "TRL 策略只支持 Discrete(K)"
         hidden = _hidden_from_config(self.features_dim)
-        actor, critic = build_nets(self.features_dim, self.action_space.n, hidden=hidden)
+        actor, critic = build_nets(self.features_dim, int(self.action_space.n), hidden=hidden)
         self.mlp_extractor = SeparatePiVfNets(actor, critic).to(self.device)
 
     def _build(self, lr_schedule: Schedule) -> None:
         """覆写 policies.py:585-634：头已在两网内（action_net/value_net=Identity，无参数），
-        跳过 ortho_init 块 :610-631，optimizer 照 :634 口径。"""
+        跳过 ortho_init 块 :610-631；optimizer 直建 Adam（D3 单 Adam——freeze.rebuild_optimizer
+        同口径，optimizer_class 动态派发从不用）。"""
         self._build_mlp_extractor()
         self.action_net = nn.Identity()
         self.value_net = nn.Identity()
-        self.optimizer = self.optimizer_class(
-            self.parameters(), lr=lr_schedule(1), **self.optimizer_kwargs
-        )  # type: ignore[call-arg]
+        self.optimizer = th.optim.Adam(self.parameters(), lr=lr_schedule(1), **self.optimizer_kwargs)

@@ -15,8 +15,8 @@ import pytest
 import torch as th
 from stable_baselines3 import PPO
 from stable_baselines3.common.vec_env import VecMonitor
-
 from test_sb3_smoke import SEED, _make_vec, _ppo
+
 from trl_sb3.policy.freeze import apply_freeze, rebuild_optimizer
 from trl_sb3.policy.policy import ActorCriticPolicy
 
@@ -34,6 +34,13 @@ def _policy() -> ActorCriticPolicy:
         return ActorCriticPolicy(vec.observation_space, vec.action_space, lr_schedule=lambda _: 6.0e-6)
     finally:
         vec.close()
+
+
+def _head(net: th.nn.Sequential) -> th.nn.Linear:
+    """net[-1] 静态类型是 Sequential | Module（torch stub）；收窄到输出头 Linear。"""
+    head = net[-1]
+    assert isinstance(head, th.nn.Linear)
+    return head
 
 
 def test_apply_freeze_requires_grad_states() -> None:
@@ -54,6 +61,7 @@ def test_frozen_params_zero_grad_and_unchanged_through_training() -> None:
     后 grad 不可残留断言，以参数位移证学习）。"""
     vec = VecMonitor(_make_vec("Abilene.gml", SEED))
     model = _ppo(vec)
+    assert isinstance(model.policy, ActorCriticPolicy)
     apply_freeze(model.policy, seed=REINIT_SEED)
     rebuild_optimizer(model)
     before = {n: p.detach().clone() for n, p in model.policy.named_parameters()}
@@ -77,8 +85,8 @@ def test_reinit_head_changes_norm_torso_bitwise_unchanged() -> None:
     policy = _policy()
     before = {n: p.detach().clone() for n, p in policy.named_parameters()}
     apply_freeze(policy, seed=REINIT_SEED)
-    head_w = policy.mlp_extractor.actor[-1].weight.detach()
-    head_b = policy.mlp_extractor.actor[-1].bias.detach()
+    head_w = _head(policy.mlp_extractor.actor).weight.detach()
+    head_b = _head(policy.mlp_extractor.actor).bias.detach()
     assert not th.equal(before["mlp_extractor.actor.4.weight"], head_w)
     assert not th.equal(before["mlp_extractor.actor.4.bias"], head_b)
     assert abs(before["mlp_extractor.actor.4.weight"].norm().item() - head_w.norm().item()) > 0.0
@@ -92,7 +100,7 @@ def test_reinit_seed_reproducible() -> None:
     头参数逐位相等，异 seed 不同（Generator 控制，PPO 全局 rng 不受影响）。"""
     policy = _policy()
     apply_freeze(policy, seed=REINIT_SEED)
-    head = policy.mlp_extractor.actor[-1]
+    head = _head(policy.mlp_extractor.actor)
     w_first = head.weight.detach().clone()
     b_first = head.bias.detach().clone()
     apply_freeze(policy, seed=REINIT_SEED)
@@ -115,6 +123,7 @@ def test_rebuild_optimizer_trainable_only() -> None:
         seed=0,
         device="cpu",
     )
+    assert isinstance(model.policy, ActorCriticPolicy)
     apply_freeze(model.policy, seed=REINIT_SEED)
     rebuild_optimizer(model)
     opt_ids = {id(p) for group in model.policy.optimizer.param_groups for p in group["params"]}
@@ -154,10 +163,11 @@ def test_apply_freeze_cuda_roundtrip() -> None:
         seed=0,
         device="cuda",
     )
+    assert isinstance(model.policy, ActorCriticPolicy)
     apply_freeze(model.policy, seed=99)
     rebuild_optimizer(model)
     model.learn(total_timesteps=STEPS * N_ABILENE)
-    head = model.policy.mlp_extractor.actor[-1]
+    head = _head(model.policy.mlp_extractor.actor)
     assert th.isfinite(head.weight.detach().cpu()).all()
     assert th.isfinite(head.bias.detach().cpu()).all()
     vec.close()
