@@ -20,9 +20,10 @@ import csv
 import hashlib
 import json
 import re
+import types
 from collections.abc import Mapping, Sequence
 from pathlib import Path
-from typing import Any
+from typing import Any, Self
 
 _SLUG_SANITIZE_RE = re.compile(r"[^A-Za-z0-9_.-]+")
 
@@ -100,8 +101,13 @@ class MetricsCSVWriter:
     def close(self) -> None:
         self._file.close()
 
-    def __enter__(self) -> MetricsCSVWriter:
+    def __enter__(self) -> Self:
         return self
 
-    def __exit__(self, exc_type: Any, exc: Any, traceback: Any) -> None:
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_value: BaseException | None,
+        traceback: types.TracebackType | None,
+    ) -> None:
         self.close()

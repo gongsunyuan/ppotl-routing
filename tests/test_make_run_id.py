@@ -9,6 +9,7 @@ import csv
 import hashlib
 import json
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -45,9 +46,12 @@ def test_make_run_id_key_order_independent() -> None:
 
 def test_make_run_id_value_change_changes_id() -> None:
     """Given 任一因素值变化；When 调用；Then id 必变。"""
-    base = dict(arm="A6", topo="CERNET.gml", rate=500, seed=3, pbrs=True, freeze=True, pretrain="run_ab")
-    id_base = make_run_id(**base)  # type: ignore[arg-type]
-    for key, new_value in [
+    base: dict[str, Any] = {
+        "arm": "A6", "topo": "CERNET.gml", "rate": 500, "seed": 3,
+        "pbrs": True, "freeze": True, "pretrain": "run_ab",
+    }
+    id_base = make_run_id(**base)
+    changes: list[tuple[str, Any]] = [
         ("arm", "A5"),
         ("topo", "NFSCNET.gml"),
         ("rate", 1500),
@@ -55,10 +59,10 @@ def test_make_run_id_value_change_changes_id() -> None:
         ("pbrs", False),
         ("freeze", False),
         ("pretrain", "run_cd"),
-    ]:
-        varied = dict(base)
-        varied[key] = new_value
-        assert make_run_id(**varied) != id_base  # type: ignore[arg-type]
+    ]
+    for key, new_value in changes:
+        varied = {**base, key: new_value}
+        assert make_run_id(**varied) != id_base
 
 
 def test_make_run_id_matches_documented_spec_no_timestamp() -> None:
@@ -142,6 +146,5 @@ def test_metrics_csv_writer_header_and_rows(tmp_path: Path) -> None:
 
 def test_metrics_csv_writer_rejects_extra_keys(tmp_path: Path) -> None:
     path = tmp_path / "metrics.csv"
-    with MetricsCSVWriter(path, ["arm", "episode"]) as w:
-        with pytest.raises(ValueError):
-            w.write_row({"arm": "A6", "episode": 0, "unexpected": 1})
+    with MetricsCSVWriter(path, ["arm", "episode"]) as w, pytest.raises(ValueError):
+        w.write_row({"arm": "A6", "episode": 0, "unexpected": 1})
