@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import importlib
+import os
 from pathlib import Path
 
 import trl_sb3
-from trl_sb3.common.config import load_config, merge, resolve_path
+from trl_sb3.common.config import PKG_ROOT, load_config, merge, resolve_path
 
 
 def test_package_has_version() -> None:
@@ -65,8 +66,7 @@ def test_merge_deep_overrides() -> None:
 def test_resolve_path_against_package_root() -> None:
     """Given 相对/绝对路径；When resolve_path；Then 分别锚定包根 / 原样返回。"""
     relative = resolve_path("topologies/CERNET.gml")
-    assert relative.is_absolute()
-    assert relative.name == "CERNET.gml"
-    assert any(parent.name == "experiments" for parent in relative.parents)
-    absolute = resolve_path("C:/some/absolute/path.yaml")
-    assert absolute == Path("C:/some/absolute/path.yaml")
+    assert relative == PKG_ROOT / "topologies" / "CERNET.gml"  # 锚定包根，与检出目录名无关
+    absolute_input = "C:/some/absolute/path.yaml" if os.name == "nt" else "/some/absolute/path.yaml"
+    absolute = resolve_path(absolute_input)
+    assert absolute == Path(absolute_input)

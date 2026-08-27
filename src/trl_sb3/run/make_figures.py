@@ -16,7 +16,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -127,7 +127,7 @@ def make_figures(
     stats = compute_stats(records)
     _write_stats(stats, out_path, prereg)
     manifest = {
-        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_at": datetime.now(UTC).isoformat(),
         "runs": str(runs_path),
         "out": str(out_path),
         "normalization": "per-(topo,rate) max of r_mean_mean across all runs (MDPI tex:475)",

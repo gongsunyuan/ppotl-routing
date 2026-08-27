@@ -38,7 +38,9 @@ def _main() -> int:
             strict=args.strict,
         )
     elif args.command == "make_figures":
-        from trl_sb3.run.make_figures import make_figures  # 惰性导入：sweep 启动不载 matplotlib
+        from trl_sb3.run.make_figures import (
+            make_figures,  # 惰性导入：sweep 启动不载 matplotlib
+        )
 
         make_figures(args.runs, args.out, args.prereg)
     return 0

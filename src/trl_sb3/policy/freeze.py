@@ -20,8 +20,6 @@ Linear(64,3) 重初始化后可训练。
 
 from __future__ import annotations
 
-from typing import Optional
-
 import torch as th
 from stable_baselines3 import PPO
 from torch import Generator
@@ -39,7 +37,7 @@ def _module_at(policy: ActorCriticPolicy, anchor: str) -> th.nn.Module:
     return nets[net_name][int(idx)]
 
 
-def apply_freeze(policy: ActorCriticPolicy, seed: Optional[int] = None) -> None:
+def apply_freeze(policy: ActorCriticPolicy, seed: int | None = None) -> None:
     """按 config freeze 节施加 D4 冻结（幂等：重复调用 requires_grad 状态不变）。
 
     - frozen_layers 逐锚点 requires_grad_(False)（躯干冻结）；

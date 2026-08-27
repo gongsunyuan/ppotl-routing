@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import traceback
 from collections.abc import Mapping
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -77,7 +77,7 @@ def build_manifest(
             "numpy": np.__version__,
             "networkx": networkx.__version__,
         },
-        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_at": datetime.now(UTC).isoformat(),
     }
     if extra:
         manifest.update(extra)

@@ -13,29 +13,28 @@ bias 复刻 nn.Linear.reset_parameters 的 U(-1/sqrt(fan_in), 1/sqrt(fan_in))（
 
 from __future__ import annotations
 
-from typing import Optional, Sequence
+from collections.abc import Sequence
 
-import torch.nn as nn
-from torch import Generator
+from torch import Generator, nn
 
 from trl_sb3.common.config import load_config
 
 
-def _hidden_layers(hidden: Optional[Sequence[int]]) -> tuple[int, ...]:
+def _hidden_layers(hidden: Sequence[int] | None) -> tuple[int, ...]:
     """隐层元：显式传入优先，否则读 config net.layers 去掉首元素（首元素是输入维 287）。"""
     if hidden is not None:
         return tuple(hidden)
     return tuple(load_config()["net"]["layers"][1:])
 
 
-def _init_linear(module: nn.Linear, generator: Optional[Generator]) -> None:
+def _init_linear(module: nn.Linear, generator: Generator | None) -> None:
     """legacy 口径初始化：kaiming(fan_out, relu) weight + Linear 默认分布 bias（generator 控制）。"""
     nn.init.kaiming_normal_(module.weight, mode="fan_out", nonlinearity="relu", generator=generator)
     bound = 1.0 / module.weight.size(1) ** 0.5
     nn.init.uniform_(module.bias, -bound, bound, generator=generator)
 
 
-def _make_net(dims: Sequence[int], generator: Optional[Generator]) -> nn.Sequential:
+def _make_net(dims: Sequence[int], generator: Generator | None) -> nn.Sequential:
     """按 dims 链 Linear，层间 PReLU（头后无激活——actor 出 logits、critic 出 V 标量）。"""
     layers: list[nn.Module] = []
     for i in range(len(dims) - 1):
@@ -52,8 +51,8 @@ def _make_net(dims: Sequence[int], generator: Optional[Generator]) -> nn.Sequent
 def make_actor(
     obs_dim: int = 287,
     n_actions: int = 3,
-    hidden: Optional[Sequence[int]] = None,
-    generator: Optional[Generator] = None,
+    hidden: Sequence[int] | None = None,
+    generator: Generator | None = None,
 ) -> nn.Sequential:
     """actor：躯干 287→128→64（PReLU）+ 头 Linear(64, n_actions)（输出 logits，
     softmax 由 SB3 CategoricalDistribution 的 logits 路径等价承担）。"""
@@ -62,8 +61,8 @@ def make_actor(
 
 def make_critic(
     obs_dim: int = 287,
-    hidden: Optional[Sequence[int]] = None,
-    generator: Optional[Generator] = None,
+    hidden: Sequence[int] | None = None,
+    generator: Generator | None = None,
 ) -> nn.Sequential:
     """critic：同躯干 + 头 Linear(64, 1)（V(s) 标量）。"""
     return _make_net([obs_dim, *_hidden_layers(hidden), 1], generator)
@@ -72,8 +71,8 @@ def make_critic(
 def build_nets(
     obs_dim: int,
     n_actions: int,
-    seed: Optional[int] = None,
-    hidden: Optional[Sequence[int]] = None,
+    seed: int | None = None,
+    hidden: Sequence[int] | None = None,
 ) -> tuple[nn.Sequential, nn.Sequential]:
     """统一入口：返回 (actor, critic)，共享一个 Generator（先 actor 后 critic 定序消耗，
     同 seed 逐位复现；seed=None 走全局 rng）。"""

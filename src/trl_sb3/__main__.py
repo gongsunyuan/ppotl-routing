@@ -3,7 +3,6 @@
 实验编排入口为 `python -m trl_sb3.run ...`（sweep/make_figures，M2-4 起落地）。
 """
 
-import sys
 
 from trl_sb3 import __version__
 
