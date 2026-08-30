@@ -49,7 +49,8 @@
   & .venv\Scripts\python.exe -m trl_sb3.run sweep --grid config/grid_baseline.yaml --device cpu
   ```
 
-  结果快照（2026-08-30；canonical 源 = `runs/<run_id>/eval.json` 的 final，指标口径 §5）：
+  结果快照（2026-08-30；canonical 源 = `runs/<run_id>/eval.json` 的 final，指标口径 §5；
+  git 跟踪副本：`runs_baseline/`，与 `runs/` 同目录逐位一致，勿删）：
 
   | arm | run_id | r_mean | rd | rp | th |
   |-----|--------|--------|------|------|------|
