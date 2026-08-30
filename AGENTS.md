@@ -50,7 +50,16 @@ investigate any red before proceeding.
   backfilled `theta` in `config/metrics_prereg.yaml` — both must be adjudicated
   before building the main table.
 
+## Baseline rows (pre-completed 2026-08-30)
+
+OSPF/ECMP/LB/RR for the pilot scenario (Abilene@500) are DONE in `runs/` via
+`config/grid_baseline.yaml`; sweeps DONE-skip these 4 rows — do NOT delete
+`runs/`. Rows are deterministic (seed=0, no budget/seed factor; finals
+bit-match the `runs_smoke/` evidence). Full record + numbers: `RUNBOOK.md` §3.
+On a fresh machine, either re-run the baseline grid (~20 s, identical output)
+or let the pilot sweep recreate the rows.
+
 ## Layout (one-liner)
 
-`src/trl_sb3/{env,policy,train,eval,common,run}` · `config/` (5 yamls) ·
+`src/trl_sb3/{env,policy,train,eval,common,run}` · `config/` (6 yamls) ·
 `topologies/` (12 GML) · `tests/` · `runs*/ ckpts*/ figures*/` artifacts.

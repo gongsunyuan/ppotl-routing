@@ -38,6 +38,29 @@
 - 预算（已定案，写死在 grid_pilot.yaml）：预训练 **8000 ep × 3 种子**、适应 **1000 ep**、A1b **9000 ep × 3 种子**；lineage 守卫会**自动先跑预训练**再放行 A2/A3/A5/A6/A0，无需手工排序。
 - 计时参考（RTX 4080 Laptop 实测口径）：预训练 ≈**1.84 h/seed**、A1b ≈**0.81 h/seed**、适应臂 ≈0.09 h/run → 试点单 seed 全臂 ≈3.3 h，**3 seed ≈10 h 量级**（顺序执行；更强 GPU 按比例缩短）。
 - 中断可**裸重跑同一条命令续**（DONE 跳过幂等；runner 已修中断 append 污染）。
+- **基线行已预置（2026-08-30 记录）**：试点 34 任务中的 4 条基线行（OSPF/ECMP/LB/RR ×
+  Abilene@500）已由 `config/grid_baseline.yaml` 落盘 `runs/` 并 DONE——上方 sweep 命令会
+  幂等 SKIP-DONE 这 4 行，不重算（`runs/` 是 gitignored，DONE 标记只在本机有效，勿删）。
+  基线行确定性（恒 seed=0、无预算因素），eval.json final 与 `runs_smoke/` 同臂**逐位一致**
+  （已 diff 验证）。全新机器（`runs/` 未随目录复制）要么先跑基线网格 ~20 s 预置（结果确定
+  等价），要么让试点 sweep 顺带重建，两者产物相同：
+
+  ```powershell
+  & .venv\Scripts\python.exe -m trl_sb3.run sweep --grid config/grid_baseline.yaml --device cpu
+  ```
+
+  结果快照（2026-08-30；canonical 源 = `runs/<run_id>/eval.json` 的 final，指标口径 §5）：
+
+  | arm | run_id | r_mean | rd | rp | th |
+  |-----|--------|--------|------|------|------|
+  | OSPF | OSPF-8c0b06a690 | 0.7853 | 0.8682 | 0.7332 | 0.2658 |
+  | LB | LB-ee9354a6ee | 0.6843 | 0.7977 | 0.6226 | 0.2689 |
+  | ECMP | ECMP-7ebe62dbcb | 0.6241 | 0.7922 | 0.5380 | 0.2675 |
+  | RR | RR-23519038e5 | 0.5783 | 0.7868 | 0.4795 | 0.2652 |
+
+  轻载解读：OSPF（恒最短路）> LB > ECMP > RR（轮转）——分流把流量摊进更长候选路径反而
+  受损；RL 臂在主表需超 r_mean 0.7853 才算真增益。其余 3 个主表场景的基线行由
+  `grid_main.yaml` 在 GPU 机按同一机制补齐。
 - 跑完出试点图 + 功效材料：
 
   ```powershell

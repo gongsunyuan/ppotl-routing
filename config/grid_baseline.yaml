@@ -1,0 +1,13 @@
+# config/grid_baseline.yaml — 仅基线行网格(2026-08-30):先于预训练出 OSPF/ECMP/LB/RR 基线。
+# 场景与 grid_pilot.yaml 一致(Abilene@500);run_id 确定性且无预算/种子因素,
+# 之后跑 pilot/main 网格时这些行被 DONE 跳过,不重算。
+pretrain:
+  seeds: []            # 空 → 不产预训练任务
+  episodes: 8000       # 占位(无任务时不生效,仅通过 _merged_config 校验)
+arms: []               # 不跑训练臂
+scenarios:
+  - {topo: Abilene.gml, avgrate: 500}
+seeds: []              # 基线行恒 seed=0,此处无臂任务,留空
+zeroshot: false        # A0 依赖预训练源,跳过
+ospf: true             # OSPF 基线行(每场景 1 行)
+heuristic: [ECMP, LB, RR]  # 启发式基线行(每场景每策略 1 行)
