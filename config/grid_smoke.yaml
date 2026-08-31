@@ -14,3 +14,7 @@ a1b_budget_rule: pretrain + adapt
 zeroshot: true
 ospf: true
 heuristic: [ECMP, LB, RR]
+config_overlay:
+  paths:
+    runs_dir: runs_smoke2
+    ckpts_dir: ckpts_smoke2

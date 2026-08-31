@@ -101,7 +101,7 @@
 ## 6. 注意事项 / 裁决悬项
 
 - **幂等续跑**：run 目录含 DONE 即跳过；中断直接重跑同命令。FAILED 目录会重试（is_done 只认 DONE）。
-- **双 lr 裁决材料** = pretrain run 的 `metrics.csv` 损失曲线（直读，不走指标表）。若 A6 试点曲线明显差，按计划 Q4 补双 lr 子类（改 grid 加臂行，不动 runner）。
+- **双 lr 裁决（已结案，2026-08-31）**：裁决场所从 M3 损失曲线移至 Phase-1 预注册搜索（"一因子一场所"，DEVIATIONS #3a），stop-rule 触发 → **维持单 Adam lr=6e-6，不补双 lr 子类**。试点/主表损失曲线不再承担该裁决；冻结红线下不得据曲线重开调参。
 - **评估回合数统一（已裁决落地，2026-08-30）**：D1=YES（用户 Phase-0 执行指令）——全行型统一 10；`metrics_prereg.yaml` `final_eval_episodes: 10`，基线 OSPF 行已删目录重生成对齐（见 §3 D1 注记）。θ 回填仍是 §4 的独立悬项（其 OSPF 输入现为 episodes=10 行）。
 - 控制台中文乱码是显示问题，中文路径可用；删大目录给足 timeout，失败 fallback `cmd /c "rd /s /q <path>"`。
 - 图内文字全英文（无中文字体依赖）；场景标签 NFSCNET.gml 显示为论文拼写 **NSFCNET**（同一网络）。

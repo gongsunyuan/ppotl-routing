@@ -207,7 +207,7 @@ experiments/                      # 原 .venv 与旧代码已在 M-1 清空
 | M1 | NodeFanVecEnv + 自定义策略 + SB3 冒烟 | 测试 5,6 绿；1 回合训练曲线与 legacy 定性同形 |
 | M2 | 臂 runner + 冻结 + lineage + 产物契约 | 测试 2,3,7 绿；`--dry-run` 输出全部计划 run |
 | M2.5 | **ECMP/LB/RR 启发式基线**（`heuristics.py` 分流策略 + 评估管线接入） | 4 目标场景 × 10 评估种子全出数；与 OSPF 行同格式产物 |
-| M3 | 试点：3 配对种子 × 全臂（**含 A1b/A3b/A0**）× CERNET→Abilene | 指标管线端到端；功效校验定终版种子数；**视损失曲线决定是否补双 lr 子类（用户裁决：先单 lr=6e-6）** |
+| M3 | 试点：3 配对种子 × 全臂（**含 A1b/A3b/A0**）× CERNET→Abilene | 指标管线端到端；功效校验定终版种子数；双 lr 子类已裁决不补（2026-08-31 Phase-1 预注册搜索 stop-rule 维持单 lr=6e-6，DEVIATIONS #3a——原"视损失曲线再定"场所退役） |
 | M4 | 主表 10 种子 + 图 + 统计 | fig：8 臂小倍数适应曲线 + CI + τ 竖标线 |
 | M5 | （可选附录）速率扫描 / 第二源 / token-trunk 架构臂 | 用户决定 |
 
@@ -217,7 +217,7 @@ experiments/                      # 原 .venv 与旧代码已在 M-1 清空
 
 1. 修 `[done]*9` 永真 bug → truncated 语义 + GAE(λ=1) bootstrap（legacy γ 是死代码，F5）；
 2. PBRS 实现为 `γG(s′)−G(s)`（= legacy − 常数 (1−γ)，不变性正确形式）；**论文 tex 公式符号与其自身 Φ 定义矛盾，建议随文勘误**（F4）；
-3. 单优化器 lr=6e-6，弃 10× 双 lr 与 actor wd=1e-4（F13）（可选双 lr 子类，Q4）。**注意：当前 MDPI 投稿 tex:462 超参表明写双 lr（6e-6/6e-7）——若 M3 后维持单 lr，论文该行须同步修订；若保留论文表述则须补双 lr 子类对齐**；
+3. 单优化器 lr=6e-6，弃 10× 双 lr 与 actor wd=1e-4（F13）（可选双 lr 子类，Q4）。**已裁决（2026-08-31，Phase-1 stop-rule，DEVIATIONS #3a）：维持单 lr → 论文 tex:462 该行须修订为单 Adam 6e-6；tex 源不在本执行机（mdpi-submission-entropy/ 未随迁移），编辑落在论文仓库侧，修订内容以 #3a 为准**；
 4. ent_coef=0.05（legacy 实际步进值，F12）；
 5. arm3/6 冻结语义按论文叙事+死注释意图新定义（legacy 从未运行过部分冻结，F6/F7）；main_trans 的"跨拓扑"实为零样本评估，本计划以 A0 行显式对应；
 6. float64 替代 Decimal（oracle 测试背书）；
@@ -231,7 +231,7 @@ experiments/                      # 原 .venv 与旧代码已在 M-1 清空
 - **Q1 消融臂**：✅ 6 臂 + A1b + A3b + A0（8 臂 + 零样本行）；
 - **Q2 主表**：✅ 裁剪版（CERNET 源 × 4 目标场景 × 10 配对种子，速率扫描为可选附录）；
 - **Q3 位置**：✅ 用户自定义——**清空 experiments/，uv 重建环境，全部依赖 `==` 精确锁版本**（见 D6/M-1）；
-- **Q4 优化器**：✅ 先单 lr=6e-6，M3 试点视曲线再定是否补双 lr 子类；
+- **Q4 优化器**：✅ 单 lr=6e-6 定案（2026-08-31 Phase-1 预注册搜索 stop-rule，取代"M3 视曲线再定"；DEVIATIONS #3a）；
 - **Q5 补充实验（2026-08-26 二次裁决）**：✅ 新增 ECMP/LB/RR 启发式基线（M2.5，利用 add_flows 原生分流支持）；✅ 核查确认原论文对比面 = OSPF + PPO/PPO_C/PPO_l，计划已全覆盖无缺失，不引入 MA-TD3/Dec_MAPPO/DRSIR 等重型第三方 DRL 基线（原论文从未有过，loadmap 仅是未实现规划）。
 
 **残余风险**（执行时注意）：
