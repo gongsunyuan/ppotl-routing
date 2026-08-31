@@ -1,0 +1,13 @@
+# config/grid_pilot_pretrain_s2.yaml — Phase-3 试点预训练按种子派生网格(2026-08-31 重启载体)
+# 用途:共享机高负载下单线程×多进程执行(RUNBOOK §6.1 决策 b+c);与 grid_pilot.yaml
+# 同因子同预算(pretrain 8000ep, CERNET@500, seed 2),run_id 逐位一致,产物同落 runs//ckpts/
+# (whole-run 粒度并行,不共享 run 目录——红线 §1.4)。arms/scenarios 置空 = 只计划预训练行。
+pretrain:
+  seeds: [2]
+  episodes: 8000
+arms: []
+scenarios: []
+seeds: []
+zeroshot: false
+ospf: false
+heuristic: []
