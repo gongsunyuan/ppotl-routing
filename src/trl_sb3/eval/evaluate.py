@@ -62,7 +62,11 @@ def greedy_eval(
     """固定种子流贪心评估：每回合 reset(seed=eval_seeds[i]) 后贪心跑满 episode_steps。
 
     返回 {"episodes":[{seed, steps:[{step,rd,rp,th,r_mean}], r_mean_sum, rd_mean,
-    rp_mean, th_mean}], *EVAL_AGG_KEYS}。rd/rp/th 为 per-node 均值标量。"""
+    rp_mean, th_mean}], *EVAL_AGG_KEYS}。rd/rp/th 为 per-node 均值标量。
+    eval.ospf_agreement_log=true（叙事增项，计划 §5，EXPLORATORY）时追加
+    "ospf_agreement":{per_episode, overall}——贪心动作==ospf_action 的决策比例
+    （D8 贪心下所选动作即分布 argmax）：纯观察，不动 RNG/动作选择/回合流；
+    OFF 不追加键，产物与旧行为逐字节一致。"""
     cfg = load_config() if config is None else config
     if n_episodes is None:
         n_episodes = int(cfg["eval"]["eval_episodes"])
@@ -70,13 +74,22 @@ def greedy_eval(
         base = int(cfg["eval"]["eval_seed_base"])
         eval_seeds = [base + i for i in range(n_episodes)]
     steps_per_episode = int(cfg["env"]["episode_steps"])
+    agreement_on = bool(cfg["eval"]["ospf_agreement_log"])
+    ospf_action = int(cfg["eval"]["ospf_action"])
     env = build_routing_env(topo, avgrate, pbrs=False, seed=eval_seeds[0], config=cfg)
     episodes: list[dict[str, Any]] = []
+    agreement_per_episode: list[float] = []
     for ep_seed in eval_seeds:
         obs, _ = env.reset(seed=ep_seed)
         steps: list[dict[str, float]] = []
+        hits = 0
+        decisions = 0
         for step in range(steps_per_episode):
-            obs, _, _, _, info = env.step(policy_fn(obs))
+            actions = policy_fn(obs)
+            obs, _, _, _, info = env.step(actions)
+            if agreement_on:
+                hits += int(np.count_nonzero(actions == ospf_action))
+                decisions += int(actions.size)
             steps.append(
                 {
                     "step": step,
@@ -96,14 +109,22 @@ def greedy_eval(
                 "th_mean": float(np.mean([s["th"] for s in steps])),
             }
         )
+        if agreement_on:
+            agreement_per_episode.append(hits / decisions)
     all_r_mean = [s["r_mean"] for episode in episodes for s in episode["steps"]]
-    return {
+    result: dict[str, Any] = {
         "episodes": episodes,
         "r_mean_mean": float(np.mean(all_r_mean)),
         "rd_mean": float(np.mean([e["rd_mean"] for e in episodes])),
         "rp_mean": float(np.mean([e["rp_mean"] for e in episodes])),
         "th_mean": float(np.mean([e["th_mean"] for e in episodes])),
     }
+    if agreement_on:
+        result["ospf_agreement"] = {
+            "per_episode": agreement_per_episode,
+            "overall": float(np.mean(agreement_per_episode)),
+        }
+    return result
 
 
 def run_eval_only(
@@ -140,10 +161,10 @@ def run_eval_only(
         with MetricsCSVWriter(directory / "metrics.csv", METRICS_COLUMNS) as writer:
             for ep_idx, episode in enumerate(result["episodes"]):
                 write_eval_rows(writer, arm, topo, int(rate), seed, ep_idx, episode)
-        write_manifest(
-            directory / "eval.json",
-            {"curve": [], "final": {key: result[key] for key in EVAL_AGG_KEYS}},
-        )
+        eval_payload: dict[str, Any] = {"curve": [], "final": {key: result[key] for key in EVAL_AGG_KEYS}}
+        if "ospf_agreement" in result:  # 叙事增项缝：仅 ON 时附加（OFF 字节同旧）
+            eval_payload["ospf_agreement"] = result["ospf_agreement"]
+        write_manifest(directory / "eval.json", eval_payload)
         manifest = build_manifest(
             run_id,
             arm,

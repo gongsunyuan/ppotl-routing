@@ -2,6 +2,17 @@
 # 防事后择优：θ/W/k/α 跑主表前钉死于此；指标（eval/metrics.py）与聚合器
 # （run/aggregate.py）按本文件取值，代码不硬编码。theta=null = 尚未预注册，
 # 聚合暂按 theta_rule 推导口径；试点后回填定值（此后不得再改）。
+# 任何偏离须显式修订本文件（升 meta.version 并留痕，约定对齐 tuning_prereg.yaml）。
+
+# —— meta：预注册身份与版本留痕（2026-08-31 随叙事增项注册引入）——
+meta:
+  status: pre_registered_before_main_table_generation  # 叙事增项先于主表余量数据生成注册（计划 §5）
+  date: "2026-08-31"                                   # 引号防 YAML date 类型化
+  version: 2
+  change_log:
+    - {version: 2, date: "2026-08-31", change: "叙事增项注册（计划 §5 主表余量，冻结前入预注册信封；全部 EXPLORATORY——不进确认性指标族/显著性族，不回灌 θ/W/k，增项数据缺席不阻塞主表）：① 基线负载扫 rates [250,500,1000,1500,2000] × 主拓扑（解释 = 预训练源拓扑 CERNET.gml，GATE-2 待用户确认）；② OSPF-agreement 率日志（paper_defaults.eval.ospf_agreement_log，默认 false，on/off 位同 determinism 测试锁定）；③ Δ-vs-OSPF 逐场景面板 + 泛化差距面板（make_figures 小扩展）"}
+    - {version: 1, date: "2026-08-30", change: 初始预注册（θ/W/k/α 骨架；final_eval_episodes 记 D1 裁决 2026-08-30）}
+  plan: .omo/plans/experiment-execution-plan.md
 
 # —— threshold（τ 绝对阈值 θ，计划 §5-1）——
 # 试点后回填定值 float；null = 未预注册，聚合按 theta_rule 推导
@@ -30,3 +41,33 @@ primary_metric: tau
 # 启发式行同噪声地板）。OSPF 基线行已删目录重生成对齐（manifest.episodes==10）；
 # 启发式行原本即 10 无需重跑；arms 周期曲线评估间隔不受影响。
 final_eval_episodes: 10
+
+# —— narrative_extras：主表叙事增项（计划 §5 主表余量；全部 EXPLORATORY）——
+# 防事后择优：增项先于主表余量数据生成注册于此；EXPLORATORY = 不进主指标 τ/
+# Holm 显著性族，不回灌 θ/W/k。三项均零参数观察/绘图，不改变任何训练语义。
+narrative_extras:
+  label: exploratory  # 三项统一探索性标签
+  load_sweep:  # (i) 基线负载扫：零参数评估行，分钟级
+    rates: [250, 500, 1000, 1500, 2000]  # 覆盖试点/主表 500 与压力轴 1500，两侧外推书挡
+    topology: CERNET.gml  # 计划措辞"主拓扑"的解释（见 topology_note）
+    topology_note: "计划措辞'主拓扑'解释 = 预训练源拓扑（config/default.yaml paper_defaults.pretrain.topology = CERNET.gml，F8/D5）；该解释在 GATE-2 提请用户确认"
+    rows: {arms: [OSPF, ECMP, LB, RR], seed: 0, zero_parameter: true}
+  ospf_agreement:  # (ii) OSPF-agreement 率日志：纯观察
+    flag: paper_defaults.eval.ospf_agreement_log  # config/default.yaml；默认 false；不是 run_id 因素（run_id 确定性不变）
+    definition: >-
+      贪心评估逐（步, 节点）决策中 argmax(π) == ospf_action（0；D8 贪心下所选动作
+      即分布 argmax）的比例；逐评估回合与总体聚合成 eval.json 顶层
+      ospf_agreement{per_episode[], overall}
+    determinism_proof: tests/test_ospf_agreement_bitmatch.py  # on/off 位同：metrics.csv 逐字节、eval.json 除新增字段
+  delta_vs_ospf:  # (iii-a) Δ-vs-OSPF 逐场景面板
+    definition: >-
+      Δ(arm, 场景) = mean over seeds(arm final r_mean_mean) − OSPF final
+      r_mean_mean；误差棒 = 种子 SD；水平零线 = OSPF 平价（正值 = 超 OSPF）
+    panel: make_figures delta_vs_ospf 图；缺 OSPF 行或学习臂 final 的场景跳过（优雅降级）
+  generalization_gap:  # (iii-b) 泛化差距面板
+    definition: >-
+      泛化差距 = A0 final vs 同种子适应臂 final（逐共享种子配对差 adapted − A0）
+    panel: >-
+      make_figures generalization_gap 图，逐场景 A0 vs 适应臂 final（A6 在场取
+      A6，否则取该场景 final 种子均值最优学习臂）；缺 A0 行或无学习臂 final
+      的场景跳过（优雅降级）

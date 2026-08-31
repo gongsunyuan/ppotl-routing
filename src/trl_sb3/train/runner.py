@@ -247,10 +247,13 @@ def _train_and_write(spec: _RunSpec) -> Path:
                 total_timesteps=spec.episodes * steps_per_episode * vec.num_envs, callback=logger
             )
         final_eval = greedy_eval(ppo_policy(model), spec.topo, spec.rate, config=spec.config)
-        write_manifest(
-            directory / "eval.json",
-            {"curve": logger.curve, "final": {key: final_eval[key] for key in EVAL_AGG_KEYS}},
-        )
+        eval_payload: dict[str, Any] = {
+            "curve": logger.curve,
+            "final": {key: final_eval[key] for key in EVAL_AGG_KEYS},
+        }
+        if "ospf_agreement" in final_eval:  # 叙事增项缝（计划 §5）：仅 ON 时附加（OFF 字节同旧）
+            eval_payload["ospf_agreement"] = final_eval["ospf_agreement"]
+        write_manifest(directory / "eval.json", eval_payload)
         manifest = build_manifest(
             run_id,
             spec.arm,

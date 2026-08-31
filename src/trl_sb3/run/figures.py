@@ -12,6 +12,10 @@ corresponding experimental runs"）：同一 (topo, rate) 场景内跨**全部�
 图 2 build_asymptote_figure：逐场景子图，各臂归一化渐近均值柱 + CI 误差棒，
 OSPF/ECMP/LB/RR/A0 参照柱（final_mean，无 CI）并列；渐近不可估（None，
 曲线 <2 点）的臂跳过并在图底注明。
+图 3 build_delta_ospf_figure / 图 4 build_generalization_gap_figure：叙事增项
+（计划 §5 主表余量，EXPLORATORY，metrics_prereg.yaml narrative_extras）——
+Δ-vs-OSPF 逐场景柱（种子 SD 误差棒、零线=OSPF 平价）与 A0 vs 适应臂泛化
+差距柱；缺 OSPF/A0 行或缺种子的场景跳过（优雅降级），全场景降级则整图缺席。
 
 本模块无 IO（输入 records/table，输出 Figure）；matplotlib 用 Agg 后端。
 IO 编排与统计见 run/make_figures.py。
@@ -19,7 +23,7 @@ IO 编排与统计见 run/make_figures.py。
 
 from __future__ import annotations
 
-from statistics import mean
+from statistics import mean, stdev
 from typing import Any
 
 import matplotlib
@@ -265,4 +269,152 @@ def build_asymptote_figure(table: list[dict[str, Any]], denominators: dict[tuple
     if skipped:
         fig.text(0.5, -0.02, f"Asymptote not estimable (curves <2 points): {', '.join(skipped)}",
                  ha="center", fontsize=8)
+    return fig
+
+
+# —— 叙事增项（计划 §5 主表余量，EXPLORATORY；metrics_prereg.yaml narrative_extras）——
+
+def _finals_by_seed(records: list[dict[str, Any]], arm: str, scene: tuple[str, int]) -> dict[int, float]:
+    """(arm, scene) 内逐种子 final r_mean_mean → {seed: value}（final 缺席的行不入）。
+
+    同种子重复行（如冒烟网格多源 A0）取 collect_runs 目录序最后一行——确定性
+    口径；主表配对设计下 (arm, scene, seed) 唯一，不触发。"""
+    return {
+        int(record["seed"]): float(record["final"]["r_mean_mean"])
+        for record in records
+        if record["arm"] == arm and _scene_of(record) == scene
+        and record["final"].get("r_mean_mean") is not None
+    }
+
+
+def _seed_summary(finals: dict[int, float]) -> dict[str, Any]:
+    """种子间汇总：mean + SD（n=1 无 SD → 0，误差棒退化）。"""
+    values = list(finals.values())
+    return {"mean": mean(values), "sd": stdev(values) if len(values) >= 2 else 0.0, "n_seeds": len(values)}
+
+
+def delta_ospf_stats(records: list[dict[str, Any]]) -> dict[tuple[str, int], dict[str, dict[str, Any]]]:
+    """逐场景 Δ-vs-OSPF 统计（图 3 数据，EXPLORATORY）：每学习臂（final 在场、
+    非 NON_SCORING_ARMS）Δ = 种子均值(final) − OSPF final 种子均值，sd = 臂内
+    种子 SD。场景需 OSPF final 与 ≥1 学习臂 final，否则整场景跳过（优雅降级）。"""
+    stats: dict[tuple[str, int], dict[str, dict[str, Any]]] = {}
+    for scene in sorted({_scene_of(r) for r in records}):
+        ospf_finals = _finals_by_seed(records, "OSPF", scene)
+        arm_finals = {
+            record["arm"]: _finals_by_seed(records, record["arm"], scene)
+            for record in records
+            if _scene_of(record) == scene
+            and record["arm"] not in NON_SCORING_ARMS
+            and record["final"].get("r_mean_mean") is not None
+        }
+        if not ospf_finals or not arm_finals:
+            continue
+        ospf_mean = mean(list(ospf_finals.values()))
+        stats[scene] = {
+            arm: {"delta": mean(list(finals.values())) - ospf_mean, **_seed_summary(finals)}
+            for arm, finals in arm_finals.items()
+        }
+    return stats
+
+
+def generalization_gap_stats(records: list[dict[str, Any]]) -> dict[tuple[str, int], dict[str, Any]]:
+    """逐场景泛化差距统计（图 4 数据，EXPLORATORY）：A0 final vs 同种子适应臂
+    final。适应臂 = A6 在场取 A6（全方法臂，计划 §5 A6 先行波口径），否则取该
+    场景 final 种子均值最优学习臂；paired_gap = 逐共享种子 (adapted − A0) 均值。
+    缺 A0 final、无学习臂 final 或无共享种子的场景跳过（优雅降级）。"""
+    stats: dict[tuple[str, int], dict[str, Any]] = {}
+    for scene in sorted({_scene_of(r) for r in records}):
+        a0_finals = _finals_by_seed(records, "A0", scene)
+        candidates = {
+            record["arm"]: _finals_by_seed(records, record["arm"], scene)
+            for record in records
+            if _scene_of(record) == scene
+            and record["arm"] not in NON_SCORING_ARMS
+            and record["final"].get("r_mean_mean") is not None
+        }
+        if not a0_finals or not candidates:
+            continue
+        if "A6" in candidates:
+            arm = "A6"
+        else:  # 最优适应臂：种子均值并列时字典序首者（确定性）
+            arm = min(candidates, key=lambda a: (-mean(list(candidates[a].values())), a))
+        adapted_finals = candidates[arm]
+        shared = sorted(set(a0_finals) & set(adapted_finals))
+        if not shared:
+            continue
+        stats[scene] = {
+            "arm": arm,
+            "shared_seeds": shared,
+            "a0": _seed_summary(a0_finals),
+            "adapted": _seed_summary(adapted_finals),
+            "paired_gap": mean([adapted_finals[s] - a0_finals[s] for s in shared]),
+        }
+    return stats
+
+
+def _scene_grid(scenes: list[tuple[str, int]]) -> tuple[Figure, Any]:
+    """逐场景子图网格（1-2 列自适应，多余轴隐藏）；复用图 2 版式。"""
+    ncols = min(len(scenes), 2)
+    nrows = -(-len(scenes) // ncols)
+    fig, axes = plt.subplots(
+        nrows, ncols, figsize=(6.4 * ncols, 4.2 * nrows), squeeze=False, constrained_layout=True
+    )
+    for ax in axes.flat[len(scenes):]:
+        ax.set_visible(False)
+    return fig, axes
+
+
+def build_delta_ospf_figure(records: list[dict[str, Any]]) -> Figure:
+    """图 3（纯函数，EXPLORATORY）：逐场景学习臂 Δ-vs-OSPF 柱（种子均值，误差棒
+    = 种子 SD），水平零线 = OSPF 平价（正值 = 超 OSPF）。缺 OSPF 行或学习臂
+    final 的场景不入图；全场景降级 → ValueError（调用方跳过整图）。"""
+    stats = delta_ospf_stats(records)
+    if not stats:
+        raise ValueError("Δ-vs-OSPF 无可画场景：缺 OSPF 行或学习臂 final（叙事增项，EXPLORATORY）")
+    scenes = sorted(stats)
+    fig, axes = _scene_grid(scenes)
+    for ax, scene in zip(axes.flat, scenes):
+        arm_stats = stats[scene]
+        arms = sorted(arm_stats, key=_bar_order)
+        positions = range(len(arms))
+        ax.bar(
+            positions,
+            [arm_stats[arm]["delta"] for arm in arms],
+            yerr=[arm_stats[arm]["sd"] for arm in arms],
+            capsize=3, color=_ARM_COLOR, edgecolor="black", linewidth=0.4,
+        )
+        ax.axhline(0.0, color="0.15", linewidth=1.0)  # OSPF parity
+        ax.set_xticks(list(positions), arms, rotation=45, ha="right", fontsize=8)
+        ax.set_title(_scene_text(scene), fontsize=11)
+        ax.set_ylabel("Δ final r_mean vs OSPF (seed mean ± SD)" if len(scenes) <= 2 else None)
+    fig.suptitle("Δ vs OSPF by arm (final r_mean, seed mean ± SD; exploratory)", fontsize=13)
+    return fig
+
+
+def build_generalization_gap_figure(records: list[dict[str, Any]]) -> Figure:
+    """图 4（纯函数，EXPLORATORY）：逐场景 A0 vs 适应臂 final 柱（种子均值 ±
+    种子 SD 误差棒），子图内标注同种子配对差距（shared seeds）。缺 A0 行、无
+    学习臂 final 或无共享种子的场景不入图；全场景降级 → ValueError。"""
+    stats = generalization_gap_stats(records)
+    if not stats:
+        raise ValueError("泛化差距无可画场景：缺 A0 行或学习臂 final（叙事增项，EXPLORATORY）")
+    scenes = sorted(stats)
+    fig, axes = _scene_grid(scenes)
+    for ax, scene in zip(axes.flat, scenes):
+        row = stats[scene]
+        labels = ["A0 (zero-shot)", row["arm"]]
+        heights = [row["a0"]["mean"], row["adapted"]["mean"]]
+        errors = [row["a0"]["sd"], row["adapted"]["sd"]]
+        ax.bar(
+            [0, 1], heights, yerr=errors, capsize=4,
+            color=[_REF_COLOR, _ARM_COLOR], edgecolor="black", linewidth=0.4,
+        )
+        ax.set_xticks([0, 1], labels)
+        ax.set_title(_scene_text(scene), fontsize=11)
+        ax.set_ylabel("Final r_mean (seed mean ± SD)" if len(scenes) <= 2 else None)
+        ax.text(
+            0.02, 0.95, f"paired gap (n={len(row['shared_seeds'])}): {row['paired_gap']:+.4f}",
+            transform=ax.transAxes, ha="left", va="top", fontsize=8,
+        )
+    fig.suptitle("Generalization gap: A0 vs adapted arm (final r_mean; exploratory)", fontsize=13)
     return fig

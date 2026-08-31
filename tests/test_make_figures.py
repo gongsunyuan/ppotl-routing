@@ -5,18 +5,33 @@ runs_smoke 数据优先，缺则合成 runs 目录 fixture——8 臂 + OSPF/ECM
 锁定：normalize_records 值域 [0,1] 且逐场景 max=1、不改输入；TOPO_LABELS 仅
 含论文拼写映射；compute_stats 的 holm_p 按原 p 升序单调不减且 ≥ 原 p；产物
 契约 2 PNG + 2 PDF + stats.json/csv + figure_manifest.json 且图文件 >10KB。
+
+叙事增项（计划 §5 主表余量，EXPLORATORY）：Δ-vs-OSPF 与泛化差距统计纯函数
+值有限、缺 OSPF/A0 行或缺种子的场景优雅跳过（全场景降级 → 构建器
+ValueError）、端到端两新图（PNG+PDF ×2）落地。
 """
 
 from __future__ import annotations
 
 import json
+import math
 from itertools import pairwise
 from pathlib import Path
+from statistics import stdev
 from typing import Any
 
 import pytest
+from matplotlib import pyplot as plt
 
-from trl_sb3.run.figures import TOPO_LABELS, normalize_records, topo_label
+from trl_sb3.run.figures import (
+    TOPO_LABELS,
+    build_delta_ospf_figure,
+    build_generalization_gap_figure,
+    delta_ospf_stats,
+    generalization_gap_stats,
+    normalize_records,
+    topo_label,
+)
 from trl_sb3.run.make_figures import compute_stats, make_figures
 
 PKG_ROOT = Path(__file__).resolve().parents[1]
@@ -95,6 +110,83 @@ def test_compute_stats_holm_monotone_nondecreasing() -> None:
     assert all(later >= earlier for earlier, later in pairwise(ordered))
 
 
+def test_delta_ospf_stats_finite_and_skips_unqualified_scenes() -> None:
+    """Given 三场景（Abilene=OSPF+学习臂；NFSCNET 缺 OSPF 行；CERNET 仅 OSPF 无
+    学习臂）；When delta_ospf_stats；Then 仅 Abilene 入表：A1 Δ=种子均值−OSPF
+    final、sd=种子 SD、n_seeds 正确、值有限，缺前提场景优雅跳过。"""
+    records = [
+        _record("OSPF", 0, [], 0.10),
+        _record("A1", 0, _curve(0.1, 0.60), 0.60),
+        _record("A1", 1, _curve(0.1, 0.66), 0.66),
+        _record("A6", 0, _curve(0.1, 0.50), 0.50),
+        _record("A1", 0, _curve(0.1, 0.70), 0.70, topo="NFSCNET.gml"),  # 缺 OSPF → 跳过
+        _record("OSPF", 0, [], 0.20, topo="CERNET.gml"),  # 无学习臂 → 跳过
+    ]
+    stats = delta_ospf_stats(records)
+    assert set(stats) == {("Abilene.gml", 500)}
+    a1 = stats[("Abilene.gml", 500)]["A1"]
+    assert a1["delta"] == pytest.approx(0.63 - 0.10)
+    assert a1["sd"] == pytest.approx(stdev([0.60, 0.66]))
+    assert a1["n_seeds"] == 2
+    a6 = stats[("Abilene.gml", 500)]["A6"]
+    assert a6["sd"] == 0.0 and a6["n_seeds"] == 1  # 单种子 SD 退化 0（误差棒点）
+    assert all(
+        math.isfinite(row["delta"]) and math.isfinite(row["sd"])
+        for row in stats[("Abilene.gml", 500)].values()
+    )
+
+
+def test_generalization_gap_stats_prefers_a6_and_pairs_shared_seeds() -> None:
+    """Given 场景 A0（种子 0/1）+ A6（种子 0/1）+ 均值更高的 A1；When
+    generalization_gap_stats；Then 适应臂取 A6（在场优先）；paired_gap=逐共享种子
+    （A6−A0）均值；缺 A0 行的场景跳过；A6 缺席时取 final 最优学习臂。"""
+    records = [
+        _record("A0", 0, [], 0.20),
+        _record("A0", 1, [], 0.22),
+        _record("A6", 0, _curve(0.1, 0.50), 0.50),
+        _record("A6", 1, _curve(0.1, 0.54), 0.54),
+        _record("A1", 0, _curve(0.1, 0.80), 0.80),
+        _record("A6", 0, _curve(0.1, 0.50), 0.50, topo="NFSCNET.gml"),  # 缺 A0 → 跳过
+        _record("A0", 0, [], 0.10, topo="CERNET.gml"),  # A6 缺席 → 适应臂 = 最优 A1
+        _record("A1", 0, _curve(0.1, 0.40), 0.40, topo="CERNET.gml"),
+        _record("A2", 0, _curve(0.1, 0.30), 0.30, topo="CERNET.gml"),
+    ]
+    stats = generalization_gap_stats(records)
+    assert set(stats) == {("Abilene.gml", 500), ("CERNET.gml", 500)}
+    abilene = stats[("Abilene.gml", 500)]
+    assert abilene["arm"] == "A6"  # A6 在场优先，虽 A1 final 均值更高
+    assert abilene["shared_seeds"] == [0, 1]
+    assert abilene["paired_gap"] == pytest.approx(((0.50 - 0.20) + (0.54 - 0.22)) / 2)
+    assert all(
+        math.isfinite(abilene[key]["mean"]) and math.isfinite(abilene[key]["sd"])
+        for key in ("a0", "adapted")
+    ) and math.isfinite(abilene["paired_gap"])
+    assert stats[("CERNET.gml", 500)]["arm"] == "A1"
+
+
+def test_narrative_figures_build_or_raise_on_full_degradation() -> None:
+    """Given 合格记录 → 两叙事图构建成功（可见子图数=合格场景数）；全场景降级
+    （无 OSPF / 无 A0）→ ValueError（make_figures 据此跳过整图）。"""
+    qualified = [
+        _record("OSPF", 0, [], 0.10),
+        _record("A0", 0, [], 0.20),
+        _record("A6", 0, _curve(0.1, 0.50), 0.50),
+        _record("A6", 1, _curve(0.1, 0.52), 0.52),
+    ]
+    delta_fig = build_delta_ospf_figure(qualified)
+    gap_fig = build_generalization_gap_figure(qualified)
+    assert sum(ax.get_visible() for ax in delta_fig.axes) == 1
+    assert sum(ax.get_visible() for ax in gap_fig.axes) == 1
+    plt.close(delta_fig)
+    plt.close(gap_fig)
+    no_ospf = [_record("A6", 0, _curve(0.1, 0.5), 0.5), _record("A0", 0, [], 0.2)]
+    no_a0 = [_record("OSPF", 0, [], 0.1), _record("A6", 0, _curve(0.1, 0.5), 0.5)]
+    with pytest.raises(ValueError, match="OSPF"):
+        build_delta_ospf_figure(no_ospf)
+    with pytest.raises(ValueError, match="A0"):
+        build_generalization_gap_figure(no_a0)
+
+
 def _synthetic_runs(runs: Path) -> None:
     """合成 runs 目录 fixture（runs_smoke 缺席时的替身）：8 臂 × 2 种子曲线 +
     OSPF/ECMP/LB/RR 各 1 行 + A0 × 2（同一 Abilene@500 场景）。"""
@@ -136,19 +228,25 @@ def runs_source(tmp_path: Path) -> Path:
 
 def test_make_figures_end_to_end_artifacts(runs_source: Path, tmp_path: Path) -> None:
     """Given 冒烟 runs 目录（或合成替身）；When make_figures；Then figures 目录
-    出现 2 PNG + 2 PDF + stats.json/csv + figure_manifest.json，图文件 >10KB，
-    manifest 记录分母与 prereg 摘要，stats 族非空。"""
+    出现主 2 图 + 叙事增项 2 图（各 PNG+PDF）+ stats.json/csv +
+    figure_manifest.json，主图文件 >10KB、增项图 PNG 非空，manifest 记录分母与
+    prereg 摘要，stats 族非空。"""
     out = tmp_path / "figures"
     manifest = make_figures(runs_source, out, prereg_path=PKG_ROOT / "config" / "metrics_prereg.yaml")
     expected = [
         "adaptation_curves.png", "adaptation_curves.pdf",
         "asymptote_bars.png", "asymptote_bars.pdf",
+        "delta_vs_ospf.png", "delta_vs_ospf.pdf",
+        "generalization_gap.png", "generalization_gap.pdf",
         "stats.json", "stats.csv", "figure_manifest.json",
     ]
     assert all((out / name).exists() for name in expected)
     for name in ("adaptation_curves.png", "adaptation_curves.pdf", "asymptote_bars.png", "asymptote_bars.pdf"):
         assert (out / name).stat().st_size > 10_000, name
-    assert manifest["figures"] == expected[:4]
+    # 叙事增项两图（EXPLORATORY）：runs_smoke/合成 fixture 均含 OSPF/A0+学习臂 → 必出图
+    for name in ("delta_vs_ospf.png", "generalization_gap.png"):
+        assert (out / name).stat().st_size > 0, name
+    assert manifest["figures"] == expected[:8]
     assert manifest["denominators"] and manifest["prereg"]["window_episodes"] == 500
     stats = json.loads((out / "stats.json").read_text(encoding="utf-8"))
     assert stats["pairs"] and stats["baseline"] == "A1"

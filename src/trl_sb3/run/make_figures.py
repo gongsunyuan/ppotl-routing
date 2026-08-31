@@ -35,6 +35,8 @@ from trl_sb3.run.figures import (
     _scene_of,
     build_adaptation_figure,
     build_asymptote_figure,
+    build_delta_ospf_figure,
+    build_generalization_gap_figure,
     normalize_records,
 )
 
@@ -110,7 +112,8 @@ def _write_stats(stats: list[dict[str, Any]], out_dir: Path, prereg: dict[str, A
 def make_figures(
     runs_dir: str | Path, out_dir: str | Path = "figures", prereg_path: str | Path = "config/metrics_prereg.yaml"
 ) -> dict[str, Any]:
-    """IO 编排：collect_runs → 表/归一化/统计 → 2 图 + stats + figure_manifest。
+    """IO 编排：collect_runs → 表/归一化/统计 → 主 2 图 + 叙事增项 2 图（计划 §5
+    EXPLORATORY，全场景降级时跳过）+ stats + figure_manifest。
 
     相对路径锚定 experiments/ 根（resolve_path）。返回写出的 manifest dict
     （分母、prereg 摘要、文件清单、时间戳——run_id 确定性约束只涉 run 目录，
@@ -128,6 +131,16 @@ def make_figures(
         *_save(build_adaptation_figure(normalized, table, int(prereg["window_episodes"])), out_path, "adaptation_curves"),
         *_save(build_asymptote_figure(table, denominators), out_path, "asymptote_bars"),
     ]
+    # 叙事增项两图（计划 §5，EXPLORATORY）：全场景降级（缺 OSPF/A0 行或缺种子）
+    # → 整图跳过不阻塞主产物；manifest figures 清单随之缺席。
+    for build, stem in (
+        (build_delta_ospf_figure, "delta_vs_ospf"),
+        (build_generalization_gap_figure, "generalization_gap"),
+    ):
+        try:
+            figures.extend(_save(build(records), out_path, stem))
+        except ValueError as exc:
+            print(f"[make_figures] skip {stem} (no plottable scene): {exc}")
     stats = compute_stats(records)
     _write_stats(stats, out_path, prereg)
     manifest = {

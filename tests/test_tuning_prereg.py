@@ -3,6 +3,9 @@
 Phase-1 调参预注册是论文第三根预注册支柱:本测试锁定其机器可查结构 —
 节完整性、种子流分离、选择集拓扑、ε/σ̄/Score 公式原文、预注册状态 —
 防事后择优。改规则须先改 prereg 并升版本,不许让测试迁就执行。
+
+另钉住 metrics_prereg.yaml 的 narrative_extras 注册节(计划 §5 主表余量,
+EXPLORATORY)——三项叙事增项须在主表余量数据生成前注册且版本留痕。
 """
 
 from __future__ import annotations
@@ -14,6 +17,7 @@ import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 PREREG_PATH = REPO_ROOT / "config" / "tuning_prereg.yaml"
+METRICS_PREREG_PATH = REPO_ROOT / "config" / "metrics_prereg.yaml"
 
 REQUIRED_SECTIONS = [
     "meta",
@@ -37,6 +41,11 @@ REQUIRED_SECTIONS = [
 
 def _load() -> dict[str, Any]:
     with PREREG_PATH.open(encoding="utf-8") as f:
+        return yaml.safe_load(f)
+
+
+def _load_metrics() -> dict[str, Any]:
+    with METRICS_PREREG_PATH.open(encoding="utf-8") as f:
         return yaml.safe_load(f)
 
 
@@ -188,3 +197,36 @@ def test_prereg_overlay_mapping_and_concurrency_placeholder() -> None:
     assert set(doc["deliverables"]) == {"a", "b", "c", "d"}
     assert "trigger" in doc["holdout_mechanical_gate"]
     assert "rule" in doc["stopping_rule"]
+
+
+def test_metrics_prereg_narrative_extras_registered_and_version_bumped() -> None:
+    """Given metrics_prereg.yaml;When safe_load;Then meta.version 升到 2(v2=叙事
+    增项注册留痕、v1=初始)且 narrative_extras 三项注册齐全:负载扫 rates/主拓扑
+    解释与 GATE-2 确认旗标、ospf_agreement 开关引用与 determinism 测试、Δ-vs-OSPF
+    与泛化差距面板定义,统一 EXPLORATORY 标签(计划 §5 主表余量)。"""
+    doc = _load_metrics()
+    meta = doc["meta"]
+    assert meta["version"] == 2
+    assert [entry["version"] for entry in meta["change_log"]] == [2, 1]
+    assert meta["status"] == "pre_registered_before_main_table_generation"
+    # v2 留痕须点名三项增项;主拓扑解释须留 GATE-2 确认旗标
+    assert "叙事增项" in meta["change_log"][0]["change"]
+    assert "EXPLORATORY" in meta["change_log"][0]["change"]
+
+    extras = doc["narrative_extras"]
+    assert extras["label"] == "exploratory"
+    sweep = extras["load_sweep"]
+    assert sweep["rates"] == [250, 500, 1000, 1500, 2000]
+    assert sweep["topology"] == "CERNET.gml"
+    assert "GATE-2" in sweep["topology_note"]
+    assert sweep["rows"]["arms"] == ["OSPF", "ECMP", "LB", "RR"]
+
+    agreement = extras["ospf_agreement"]
+    assert agreement["flag"] == "paper_defaults.eval.ospf_agreement_log"
+    assert "ospf_action" in agreement["definition"] and "ospf_agreement" in agreement["definition"]
+    assert "test_ospf_agreement_bitmatch" in agreement["determinism_proof"]
+
+    assert "r_mean_mean" in extras["delta_vs_ospf"]["definition"]
+    assert "OSPF" in extras["delta_vs_ospf"]["panel"]
+    assert "A0" in extras["generalization_gap"]["definition"]
+    assert "A6" in extras["generalization_gap"]["panel"]

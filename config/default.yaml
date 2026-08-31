@@ -43,6 +43,7 @@ paper_defaults:
     eval_interval: 100      # 训练中周期评估间隔（回合数），M3 可调（§5 曲线采样密度）
     ospf_action: 0          # OSPF 基线 = 全节点 action 0；legacy 注释 "hop count" 有误，实为 Σ1/μ 权重 k-最短首路径（F10/DEVIATIONS #8）
     heuristic_episodes: 10  # 启发式基线（ECMP/LB/RR）评估回合数（§5 十评估种子协议，M2.5；D1 2026-08-30 后与 eval_episodes 同值 10，双轨退役）
+    ospf_agreement_log: false  # 叙事增项（计划 §5 主表余量，EXPLORATORY）：true=贪心评估顺带观察 argmax==ospf_action 比例入 eval.json；纯观察不动 RNG/动作选择/回合流，OFF 产物逐字节同旧行为（tests/test_ospf_agreement_bitmatch.py 锁定）
   adapt:
     episodes: 1000          # 微调回合数（§5 主表适应预算；M3 校准，勿逐臂重调）
   pretrain:
