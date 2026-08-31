@@ -59,12 +59,16 @@ def test_prereg_status_marks_registration_before_phase1() -> None:
     meta = _load()["meta"]
     assert meta["status"] == "pre_registered_before_phase1_execution"
     assert meta["date"] == "2026-08-30"
-    assert meta["version"] == 3
+    assert meta["version"] == 5
     change_log = meta["change_log"]
-    assert [entry["version"] for entry in change_log] == [3, 2, 1]
-    # v3(2026-08-31 执行前裁决):锚点补齐 3 种子闭合 9 配对点歧义 + plateau 聚合口径
-    assert "裁决" in change_log[0]["change"] and "[100,101,102]" in change_log[0]["change"]
-    assert "D4" in change_log[1]["change"] and "[A6]" in change_log[1]["change"]
+    assert [entry["version"] for entry in change_log] == [5, 4, 3, 2, 1]
+    # v5(2026-08-31 hidden 轴 overlay 编码裁决):Block3 overlay 前缀补输入维 287
+    assert "裁决" in change_log[0]["change"] and "[287,256,128]" in change_log[0]["change"]
+    # v4(2026-08-31 执行期机械勘误):plateau 曲线出处 eval.json + Stage-A 计量 a0_r_mean_mean
+    assert "勘误" in change_log[1]["change"] and "a0_r_mean_mean" in change_log[1]["change"]
+    # v3(2026-08-31 执行前裁决):锚点补齐 3 种子闭合 9 配对点歧义
+    assert "裁决" in change_log[2]["change"] and "[100,101,102]" in change_log[2]["change"]
+    assert "D4" in change_log[3]["change"] and "[A6]" in change_log[3]["change"]
     assert meta["plan"] == ".omo/plans/experiment-execution-plan.md"
 
 
@@ -127,7 +131,13 @@ def test_prereg_stage_ladder_numbers_match_plan() -> None:
     assert block1["trials"] == 6
     assert stage_a["blocks"]["block2"]["ent"] == [0.01, 0.1]
     assert stage_a["blocks"]["block3"]["hidden"] == [[256, 128], [64, 64]]
+    # v5 裁决:hidden 轴 overlay 编码 = [287] + 隐层规格(搜索语义不变)
+    assert stage_a["blocks"]["block3"]["overlay_encoding"]
+    assert "[287, 256, 128]" in stage_a["blocks"]["block3"]["overlay_encoding"]
     assert stage_a["advancement"]["delta_formula"] == "δ = 0.5σ̄"
+    # v4 勘误:Stage-A 排名/晋级效应计量钉死 a0_r_mean_mean(Score 保留给 winner_rule)
+    assert stage_a["advancement"]["stage_a_metric"]
+    assert "a0_r_mean_mean" in stage_a["advancement"]["stage_a_metric"]
     assert len(stage_a["known_limitations"]) == 4
     stage_b = doc["stage_b"]
     assert stage_b["candidates"] == 2
@@ -141,7 +151,9 @@ def test_prereg_stage_ladder_numbers_match_plan() -> None:
     # v3 裁决留痕:歧义旗标须有非空 resolution;plateau 聚合口径须有非空钉死文本
     assert pv["paired_points"]["resolution"]
     assert pv["incumbent_plateau"]["plateau_sigma_coefficient"] == 0.1
-    assert pv["incumbent_plateau"]["mechanical_aggregation"]
+    # v4 勘误:plateau 曲线出处 = 锚点 pretrain run 的 eval.json curve(非 metrics.csv)
+    agg = pv["incumbent_plateau"]["mechanical_aggregation"]
+    assert agg and "eval.json" in agg and "metrics.csv" not in agg
     assert pv["conservative_branch"]["min_effect_epsilon_multiplier"] == 2
 
 

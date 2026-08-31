@@ -9,8 +9,10 @@
 meta:
   status: pre_registered_before_phase1_execution  # 先于任何 Phase-1 执行提交
   date: "2026-08-30"                              # 引号防 YAML date 类型化
-  version: 3
+  version: 5
   change_log:
+    - {version: 5, date: "2026-08-31", change: "hidden 轴 overlay 编码裁决(搜索语义不变):net.layers 契约 = [输入维]+隐层,输入维 287=7×41 由 env 固定非搜索自由度(_hidden_from_config 硬校验,字面 [256,128]/[64,64] 构造即 ValueError);Block3 overlay 编码 = 前缀补 287 → [287,256,128] / [287,64,64](对应隐层规格 [256,128]/[64,64] 原义不变;冻结语义 actor.0-3 躯干对两层隐网同样成立)。实现零改动(数值路径红线)"}
+    - {version: 4, date: "2026-08-31", change: "执行期机械勘误(规则语义不变):① incumbent_plateau 曲线实际出处 = 锚点 pretrain run 的 eval.json curve(周期贪心评估,评估域=预训练源;每种子一条共 3 条,合取)— v3 误写 metrics.csv 且误设目标维(该数据无目标维);② Stage-A 排名与晋级效应计量钉死 = a0_r_mean_mean(3 选择目标 plain mean,tune.py summary 输出列),Score 公式保留给 winner_rule(Stage-B/adapt 守卫数据)。背景:Stage-0 落地后 plateau 判据按实际数据源计算为 FAIL(s100 +0.007078、s102 +0.016033 ≥ 0.1σ̄=0.006119)→ 保守分支激活(≥2ε 晋级门)"}
     - {version: 3, date: "2026-08-31", change: "执行前裁决(计划 §10 前置 1,推荐项):stage_0_anchor 2000ep 锚点补齐 seeds [100,101,102](9 配对点歧义闭合);incumbent_plateau 聚合口径钉死:9 条曲线(3 目标 × 3 种子)逐条判 <0.1σ̄ 全满足(保守合取);其余条款不变"}
     - {version: 2, date: "2026-08-30", change: "D4 用户裁决:adapt_guard.arms [A6, A2] -> [A6];其余条款不变"}
     - {version: 1, date: "2026-08-30", change: 初始预注册}
@@ -95,10 +97,12 @@ proxy_validity:
     mechanical_definition: "末 500ep 均值 − 前 500ep 均值 < 0.1σ̄"
     plateau_sigma_coefficient: 0.1
     mechanical_aggregation: >-
-      判据在 9 条曲线(3 选择目标 × 3 调参种子)上逐条独立评估;曲线取 incumbent
-      2000ep 锚点 runs 的周期性 eval r_mean(metrics.csv;eval_interval=100 → 前 500ep
-      = episodes ≤ 500 的 eval 点,末 500ep = episodes > 1500 的 eval 点);全部 9 条
-      逐一满足不等式方算通过(保守合取;任一违反 → conservative_branch)。
+      判据在 3 条曲线(每调参种子一条,共 3 条)上逐条独立评估;曲线取 incumbent
+      2000ep 锚点 pretrain run 的 eval.json → curve → r_mean_mean 点(周期贪心评估,
+      eval_interval=100,评估域=预训练源 CERNET@500 — 该曲线数据无目标维,故不按
+      目标拆分);前 500ep = episodes ≤ 500 的 curve 点,末 500ep = episodes > 1500
+      的 curve 点;全部 3 条逐一满足 末−前 < 0.1σ̄ 方算通过(保守合取;任一违反 →
+      conservative_branch)。
   conservative_branch:
     trigger: Spearman ρ≥0.6 与平台判据任一不满足
     rule: 仅 ≥2ε 的 Stage-A 效应可晋级(保守分支为缺省)
@@ -122,10 +126,18 @@ stage_a:
     block3:
       conditioned_on: best(lr, opt)
       hidden: [[256, 128], [64, 64]]
+      overlay_encoding: >-
+        hidden 轴 overlay 写法 = [287] + 隐层规格 — [256,128] → `net.layers:
+        [287, 256, 128]`,[64,64] → `net.layers: [287, 64, 64]`;输入维 287 由观测
+        固定(max_nodes=41,7×41),非搜索自由度。
       trials: 2
   advancement:
     delta_formula: "δ = 0.5σ̄"
     rule: Stage-A 最优的 δ 以内取 top-2 非 incumbent 晋级
+    stage_a_metric: >-
+      a0_r_mean_mean(3 选择目标 A0 final r_mean_mean 的 plain mean;tune.py
+      summary.csv 输出列)— Stage-A 排名、δ 窗口与保守分支 ≥2ε 效应计量一律在该
+      指标上计算;Score 公式保留给 winner_rule(Stage-B / adapt 守卫数据)。
   known_limitations:  # §3.2 要求在 prereg 披露
     - 贪心分块以 1 种子噪声连锁选点
     - ent/hidden 条件于 Block1 赢家,欠探索
@@ -207,7 +219,7 @@ search_space_to_overlay_mapping:
     lr: ppo.learning_rate
     opt: ppo.lr_critic_ratio  # single=null(单 Adam 现状);dual=0.1(legacy actor/critic=10×,§2 缝 3)
     ent: ppo.ent_coef
-    hidden: net.layers
+    hidden: net.layers  # value 写法须含输入维前缀(见 stage_a.blocks.block3.overlay_encoding)
   overlay_node: grid 的 config_overlay 深合并节点(ppo/net/paths/freeze,§2 缝 1)
   tag_convention: "<cfg>_a2000 / <cfg>_b8000"
   tag_rationale: tag 必须编码阶段与集数,防 Stage-B 被 Stage-A 的 DONE 静默跳过(§2 缝 4 tune.py 契约)
