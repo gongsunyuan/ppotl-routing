@@ -24,10 +24,24 @@
 - **one-hot 构造（step():181-183）被比例 split 取代**：即 M0-2 固化的 `_add_flows(split)` 分流缝本义（docstring 明示"行和无需为 1"），非出入。
 - **`_build_state()`（:188）调用但返回值不消费**：split 策略读 env 内部态而非 obs；保留调用以完整镜像 step 序列（_build_state 纯读无副作用）。
 - **LB 回合 2+ 首步携带上回合尾负载**：reset() 不清 `_in_rate`（构造时为空 list，_add_flows 才写入），单 env 连跑 10 回合时回合 2+ 首步的 LB split 用上回合末步入率——在线"最近可得负载估计"语义；仅回合 1 首步（fresh env）无负载退化等分。ECMP/RR 不读 _in_rate，不受影响。
-- **评估回合数双轨**：启发式=10（config `eval.heuristic_episodes`，§5 十评估种子协议），OSPF/A0=5（`eval.eval_episodes`）——跨方法比较时按 manifest.episodes 区分，聚合端（M3）勿假设 5。
+- **评估回合数双轨**：启发式=10（config `eval.heuristic_episodes`，§5 十评估种子协议），OSPF/A0=5（`eval.eval_episodes`）——跨方法比较时按 manifest.episodes 区分，聚合端（M3）勿假设 5。（**已裁决退役（2026-08-30，D1）**：统一 10，见下 M2.5/M2-4 条落定记录）
 ## M2.5/M2-4（2026-08-26）评估回合数双轨——M3 预注册时统一
 - 现状：arms 周期/终评=5 回合（config eval.eval_episodes，D8）；heuristics=10（config eval.heuristic_episodes，计划 §5 字面）；OSPF=5 且 sweep 中每场景 1 行（确定性策略无 seed 因素，幂等）
 - 裁决建议（M3 metrics_prereg 时定案）：主表终评统一 10 回合（seed 10000..10009 全行共享），arms 周期曲线保留 5（省时）；OSPF/ECMP/LB/RR 行 episodes 提到 10
+- **裁决落定（2026-08-30，D1=YES）——本条关闭**：用户 Phase-0 执行指令批准 D1——主表终评
+  回合数全行型（臂/A0/OSPF/启发式）统一 **10**（seed 10000..10009 全行共享，θ 的 OSPF 项
+  与启发式行同噪声地板，不再 5/10 混用）；arms 周期曲线评估间隔不受影响。落地清单：
+  `config/default.yaml` `eval.eval_episodes: 10`、`config/metrics_prereg.yaml`
+  `final_eval_episodes: 10`；OSPF 基线行（`runs/OSPF-8c0b06a690`，run_id 不含 episodes
+  因素故不变）删目录重生成，manifest `episodes==10` 且带缝 4 溯源（config_hash 64-hex /
+  git_commit 40-hex）；启发式行原本即 10 无需重跑；缝 5 SKIP-DONE 守卫对该陈旧 5 回合行
+  live-fire 硬失败（run_id+两侧数字+补救齐备，输出存 notepad learnings.md）；跟踪副本
+  `runs_baseline/` OSPF 行同步；RUNBOOK §3 快照重记录（新值 r_mean 0.7851 / rd 0.8676 /
+  rp 0.7331 / th 0.2661；旧 5 回合值 0.7853 / 0.8682 / 0.7332 / 0.2658 仅作历史记录，
+  OSPF 对 runs_smoke 的逐位一致由此失效——协议变更使然，ECMP/LB/RR 不受影响）。
+- **θ 悬项交叉注记（保持 open）**：`metrics_prereg.yaml` `theta: null` 回填是独立 open
+  item（RUNBOOK §4 / Phase-3 GATE-2 业务，本条不涉）；其 theta_rule 的 OSPF 贪心分输入
+  现为 episodes=10 行的 final.r_mean_mean（0.7851），不再是旧 5 回合值。
 
 ## M3（2026-08-26）中断复跑 append 污染（移交前必修）
 - 现象：无 DONE 的中断 run 目录重启后 MetricsCSVWriter 以 append 模式打开 → metrics.csv 重复行（本次 3 个中断 pretrain 实证：~74000 行后 kill）

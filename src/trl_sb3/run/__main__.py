@@ -27,6 +27,17 @@ def _main() -> int:
     figures_parser.add_argument("--runs", default="runs", help="runs 目录（相对路径锚定 experiments/ 根）")
     figures_parser.add_argument("--out", default="figures", help="输出目录（PNG 150dpi + PDF + stats + manifest）")
     figures_parser.add_argument("--prereg", default="config/metrics_prereg.yaml", help="指标预注册 YAML 路径")
+    tune_parser = subparsers.add_parser(
+        "tune", help="调参试验编排（缝 4）：tag 派生 + 碰撞守卫 + 逐试验子进程 + summary.csv"
+    )
+    tune_parser.add_argument("--trials", required=True, help="trial 定义 YAML 路径（schema 见 trl_sb3/run/tune.py docstring）")
+    tune_parser.add_argument("--device", default="cpu", help="训练设备（cpu/cuda，转发给逐试验 sweep 子进程）")
+    tune_parser.add_argument("--tune-root", default="runs_tune", help="调参产物根（相对路径锚定 experiments/ 根；summary.csv 落于此）")
+    tune_parser.add_argument("--dry-run", action="store_true", help="只做合成+守卫检查+打印计划命令，不 spawn 子进程不落盘")
+    tune_parser.add_argument(
+        "--concurrency", type=int, default=None,
+        help="受控并发池宽度（fresh 试验的子进程并发数；缺省 = §2.6 画像实测饱和点，1 = 串行）",
+    )
     args = parser.parse_args()
     if args.command == "sweep":
         run_sweep(
@@ -43,6 +54,17 @@ def _main() -> int:
         )
 
         make_figures(args.runs, args.out, args.prereg)
+    elif args.command == "tune":
+        from trl_sb3.run.tune import (  # 惰性导入：sweep 启动不载训练栈
+            DEFAULT_CONCURRENCY,
+            run_tune,
+        )
+
+        run_tune(
+            args.trials, device=args.device, dry_run=args.dry_run,
+            tune_root=args.tune_root,
+            concurrency=DEFAULT_CONCURRENCY if args.concurrency is None else args.concurrency,
+        )
     return 0
 
 

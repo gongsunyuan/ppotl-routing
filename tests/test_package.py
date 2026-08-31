@@ -45,7 +45,8 @@ def test_default_config_paper_defaults_contract() -> None:
     assert cfg["net"]["separate_pi_vf"] is True
     assert cfg["eval"]["deterministic"] is True
     assert cfg["eval"]["eval_seed_base"] == 10000
-    assert cfg["eval"]["eval_episodes"] == 5
+    assert cfg["eval"]["eval_episodes"] == 10  # D1 裁决 2026-08-30：全行型统一 10（原 D8 定 5）
+    assert cfg["eval"]["heuristic_episodes"] == 10  # D1 后与 eval_episodes 同值，双轨退役
     assert cfg["eval"]["ospf_action"] == 0
     assert cfg["pretrain"]["topology"] == "CERNET.gml"
     assert cfg["pretrain"]["avgrate"] == 500

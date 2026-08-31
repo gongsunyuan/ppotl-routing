@@ -25,6 +25,8 @@ alpha: 0.05
 # 主指标（计划 §5-1）：τ 为主结论依据，W-AUC/渐近为次指标
 primary_metric: tau
 
-# 主表终评回合数统一（issues.md M2.5/M2-4 双轨：OSPF/A0=5、启发式=10 → M3 定案）。
-# null = 未定；定案后基线行 eval episodes 对齐该值（arms 周期曲线不受影响）
-final_eval_episodes: null
+# 主表终评回合数统一（issues.md M2.5/M2-4 双轨已裁决退役：D1=YES，2026-08-30，
+# 用户 Phase-0 执行指令——全行型（臂/A0/OSPF/启发式）统一 10，θ 的 OSPF 项与
+# 启发式行同噪声地板）。OSPF 基线行已删目录重生成对齐（manifest.episodes==10）；
+# 启发式行原本即 10 无需重跑；arms 周期曲线评估间隔不受影响。
+final_eval_episodes: 10

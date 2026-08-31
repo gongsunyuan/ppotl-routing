@@ -13,16 +13,16 @@ pilot / main-table runs happen on the GPU machine per `RUNBOOK.md`.
 
 ## Hard rules (non-negotiable)
 
-1. Python is ALWAYS `.venv\Scripts\python.exe` — the global python is CPU-only torch.
-2. Paper hyperparameters live ONLY in `config/default.yaml` (`paper_defaults` section);
+1. Paper hyperparameters live ONLY in `config/default.yaml` (`paper_defaults` section);
    never hardcode them in code.
-3. `run_id` must stay deterministic (no timestamps): changing a factor changes identity.
+2. `run_id` must stay deterministic (no timestamps): changing a factor changes identity.
    Resume / DONE-skip / aggregation all depend on it.
-4. Artifact contract per run dir: `metrics.csv` / `eval.json` / `manifest.json` /
+3. Artifact contract per run dir: `metrics.csv` / `eval.json` / `manifest.json` /
    `DONE|FAILED` — never break it; the aggregation side scans by this contract.
-5. All dependencies are pinned `==` in `requirements.lock`: change the lock first, then
+4. All dependencies are pinned `==` in `requirements.lock`: change the lock first, then
    install. torch is `2.13.0+cu126` (local version) — must install with
    `--index-url https://download.pytorch.org/whl/cu126` (wheel is not on PyPI).
+5. Always use basedpyright to validate the correction of code after edit
 
 ## Common commands
 
@@ -46,9 +46,10 @@ investigate any red before proceeding.
 
 - Disable sleep before long runs (admin PowerShell): `powercfg /change standby-timeout-ac 0`.
 - Console CJK garbling is a display issue only; CJK paths resolve fine.
-- OPEN ITEMS (see `ISSUES.md`): eval-episode dual-track (5 vs 10) and the not-yet
-  backfilled `theta` in `config/metrics_prereg.yaml` — both must be adjudicated
-  before building the main table.
+- OPEN ITEM (see `ISSUES.md`): the not-yet-backfilled `theta` in
+  `config/metrics_prereg.yaml` (Phase-3 GATE-2) — must be adjudicated before building
+  the main table. (Eval-episode dual-track CLOSED 2026-08-30: D1=YES, unified at 10,
+  OSPF row regenerated.)
 
 ## Baseline rows (pre-completed 2026-08-30)
 

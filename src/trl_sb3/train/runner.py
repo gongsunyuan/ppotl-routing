@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, override
 
 from stable_baselines3 import PPO
 from stable_baselines3.common.callbacks import BaseCallback
@@ -83,17 +83,18 @@ class _RunLogger(BaseCallback):
         config: dict[str, Any],
     ) -> None:
         super().__init__(verbose=0)
-        self._writer = writer
-        self._arm = arm
-        self._topo = topo
-        self._rate = rate
-        self._seed = seed
-        self._config = config
-        self._interval = int(config["eval"]["eval_interval"])
-        self._episode = 0
-        self._step = 0
+        self._writer: MetricsCSVWriter = writer
+        self._arm: str = arm
+        self._topo: str = topo
+        self._rate: int = rate
+        self._seed: int = seed
+        self._config: dict[str, Any] = config
+        self._interval: int = int(config["eval"]["eval_interval"])
+        self._episode: int = 0
+        self._step: int = 0
         self.curve: list[dict[str, float]] = []
 
+    @override
     def _on_step(self) -> bool:
         info = self.locals["infos"][0]
         self._writer.write_row(
@@ -124,16 +125,20 @@ class _RunLogger(BaseCallback):
         return True
 
 
-def _freeze(model: PPO, seed: int) -> None:
-    """对 model.policy 施加 D4 冻结（静态声明的 policy 类型是 SB3 基类，收窄到本项目子类）。"""
+def _freeze(model: PPO, spec: _RunSpec) -> None:
+    """对 model.policy 施加 D4 冻结（静态声明的 policy 类型是 SB3 基类，收窄到本项目子类）；
+    freeze 节走 spec.config 注入（超参传播缝 2，per-run 覆盖优先于全局 config）。"""
     policy = model.policy
     assert isinstance(policy, ActorCriticPolicy)
-    apply_freeze(policy, seed=seed)
+    apply_freeze(policy, seed=spec.seed, freeze_cfg=spec.config["freeze"])
 
 
 def _build_model(vec: VecMonitor, spec: _RunSpec, ckpts_dir: Path) -> PPO:
     """预训练臂 PPO.load 源 ckpt（加载后重算整批 batch_size；冻结臂施加 D4 冻结）；
-    其余臂从 config ppo 节全参新建（batch_size=null → n_steps×N 整批，D2）。"""
+    其余臂从 config ppo 节全参新建（batch_size=null → n_steps×N 整批，D2）。
+    新建臂 policy_kwargs 从 spec.config 派生（超参传播缝 2：net.layers 覆盖真正
+    到达 policy；lr_critic_ratio 键 seam 3 才加入 default.yaml，缺省 None 只随
+    ckpt 往返不消费）；加载臂不传——SB3 load 从 zip 恢复源 policy_kwargs。"""
     if spec.source_run_id is not None:
         model = PPO.load(ckpts_dir / f"{spec.source_run_id}.zip", env=vec, device=spec.device)
         # D2 整批：batch_size 必须等于 n_steps×**目标**拓扑节点数。ckpt 恢复的是源拓扑
@@ -141,7 +146,7 @@ def _build_model(vec: VecMonitor, spec: _RunSpec, ckpts_dir: Path) -> PPO:
         # 的 mini-batch 切分上出错——加载后按目标 N 重算。
         model.batch_size = model.n_steps * vec.num_envs
         if spec.freeze:  # A3/A6：加载后冻结
-            _freeze(model, spec.seed)
+            _freeze(model, spec)
             rebuild_optimizer(model)
         return model
     ppo_cfg = spec.config["ppo"]
@@ -159,12 +164,16 @@ def _build_model(vec: VecMonitor, spec: _RunSpec, ckpts_dir: Path) -> PPO:
         ent_coef=ppo_cfg["ent_coef"],
         learning_rate=ppo_cfg["learning_rate"],
         normalize_advantage=ppo_cfg["normalize_advantage"],
+        policy_kwargs={
+            "net_layers": tuple(spec.config["net"]["layers"]),
+            "lr_critic_ratio": ppo_cfg.get("lr_critic_ratio"),
+        },
         verbose=0,
         seed=spec.seed,
         device=spec.device,
     )
     if spec.freeze:  # A3b：随机网络冻结
-        _freeze(model, spec.seed)
+        _freeze(model, spec)
         rebuild_optimizer(model)
     return model
 

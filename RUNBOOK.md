@@ -41,26 +41,38 @@
 - **基线行已预置（2026-08-30 记录）**：试点 34 任务中的 4 条基线行（OSPF/ECMP/LB/RR ×
   Abilene@500）已由 `config/grid_baseline.yaml` 落盘 `runs/` 并 DONE——上方 sweep 命令会
   幂等 SKIP-DONE 这 4 行，不重算（`runs/` 是 gitignored，DONE 标记只在本机有效，勿删）。
-  基线行确定性（恒 seed=0、无预算因素），eval.json final 与 `runs_smoke/` 同臂**逐位一致**
-  （已 diff 验证）。全新机器（`runs/` 未随目录复制）要么先跑基线网格 ~20 s 预置（结果确定
-  等价），要么让试点 sweep 顺带重建，两者产物相同：
+  基线行确定性（恒 seed=0、无预算因素）。**runs_smoke 逐位一致声明（2026-08-30 D1 后）**：
+  ECMP/LB/RR 三行 eval.json final 仍与 `runs_smoke/` 同臂**逐位一致**（已 diff 验证，协议
+  未变）；OSPF 行因 D1 协议变更（终评 5→10 回合）**有意不再**逐位对齐 `runs_smoke/`——
+  那是 5 回合旧协议的冻结证据，不回改；新旧数值对照见下方快照的 D1 注记。全新机器
+  （`runs/` 未随目录复制）要么先跑基线网格 ~20 s 预置（结果确定等价），要么让试点
+  sweep 顺带重建，两者产物相同：
 
   ```powershell
   & .venv\Scripts\python.exe -m trl_sb3.run sweep --grid config/grid_baseline.yaml --device cpu
   ```
 
   结果快照（2026-08-30；canonical 源 = `runs/<run_id>/eval.json` 的 final，指标口径 §5；
-  git 跟踪副本：`runs_baseline/`，与 `runs/` 同目录逐位一致，勿删）：
+  git 跟踪副本：`runs_baseline/`，与 `runs/` 同目录逐位一致，勿删。OSPF 行 2026-08-30
+  按 D1 episodes=10 口径重记录）：
 
   | arm | run_id | r_mean | rd | rp | th |
   |-----|--------|--------|------|------|------|
-  | OSPF | OSPF-8c0b06a690 | 0.7853 | 0.8682 | 0.7332 | 0.2658 |
+  | OSPF | OSPF-8c0b06a690 | 0.7851 | 0.8676 | 0.7331 | 0.2661 |
   | LB | LB-ee9354a6ee | 0.6843 | 0.7977 | 0.6226 | 0.2689 |
   | ECMP | ECMP-7ebe62dbcb | 0.6241 | 0.7922 | 0.5380 | 0.2675 |
   | RR | RR-23519038e5 | 0.5783 | 0.7868 | 0.4795 | 0.2652 |
 
+  **D1 协议变更注记（2026-08-30）**：终评回合数经用户裁决（D1=YES，Phase-0 执行指令）
+  全行型（臂/A0/OSPF/启发式）统一 **10**（`config/default.yaml` `eval.eval_episodes` 与
+  `config/metrics_prereg.yaml` `final_eval_episodes` 同步翻定；θ 的 OSPF 项与启发式行从此
+  同噪声地板）。OSPF 行已删目录重生成——run_id 不含 episodes 因素故目录名不变，新
+  manifest 载 episodes=10 并带 config_hash/git_commit 溯源。**旧 5 回合数值：r_mean
+  0.7853 / rd 0.8682 / rp 0.7332 / th 0.2658**（与 runs_smoke 的逐位一致仅对该旧值成立）。
+  轻载排序 OSPF > LB > ECMP > RR 结论不变。
+
   轻载解读：OSPF（恒最短路）> LB > ECMP > RR（轮转）——分流把流量摊进更长候选路径反而
-  受损；RL 臂在主表需超 r_mean 0.7853 才算真增益。其余 3 个主表场景的基线行由
+  受损；RL 臂在主表需超 r_mean 0.7851 才算真增益。其余 3 个主表场景的基线行由
   `grid_main.yaml` 在 GPU 机按同一机制补齐。
 - 跑完出试点图 + 功效材料：
 
@@ -90,6 +102,71 @@
 
 - **幂等续跑**：run 目录含 DONE 即跳过；中断直接重跑同命令。FAILED 目录会重试（is_done 只认 DONE）。
 - **双 lr 裁决材料** = pretrain run 的 `metrics.csv` 损失曲线（直读，不走指标表）。若 A6 试点曲线明显差，按计划 Q4 补双 lr 子类（改 grid 加臂行，不动 runner）。
-- **评估回合数统一**：悬而未决（issues.md M2.5 条；`metrics_prereg.yaml` 的 `final_eval_episodes: null`）。定案后改该字段并同步基线行 eval episodes，再跑主表。
+- **评估回合数统一（已裁决落地，2026-08-30）**：D1=YES（用户 Phase-0 执行指令）——全行型统一 10；`metrics_prereg.yaml` `final_eval_episodes: 10`，基线 OSPF 行已删目录重生成对齐（见 §3 D1 注记）。θ 回填仍是 §4 的独立悬项（其 OSPF 输入现为 episodes=10 行）。
 - 控制台中文乱码是显示问题，中文路径可用；删大目录给足 timeout，失败 fallback `cmd /c "rd /s /q <path>"`。
 - 图内文字全英文（无中文字体依赖）；场景标签 NFSCNET.gml 显示为论文拼写 **NSFCNET**（同一网络）。
+
+### 6.1 执行并发定案（2026-08-30，Phase-0 §2.6 GPU 利用率画像；Linux bash，GPU 机）
+
+> 证据与全部数字：`profiling/report.md`（画像 batteries + 饱和曲线 + 位同证据）。三条定案均为**纯执行层**：
+> 不触碰论文超参与数值路径（determinism/bit-match 套件全绿即红线证据），并行实体恒 whole-run 粒度。
+
+机器画像结论（4× V100S-32GB / 64 核 / 251GB）：本工作负载是 [287,128,64] 小 MLP +
+纯 Python env 步进——单 run GPU 利用率均值仅 ~9%（峰值 13%，432MiB），torch 侧 2 个
+rollout 的 GPU kernel 总耗时 ~46ms 而 CPU 侧 launch 耗时 ~789ms（launch-bound）。**主杠杆是
+CPU 并发，不是 GPU**：cpu 路线稳态聚合 62.9 eps/s @48 并发，是单 GPU cuda 多进程 plateau
+（13.2）的 4.8×，也高于 3-GPU 轮转 cuda（31.6 @48）。
+
+**决策 (a)——tune.py 受控并发池**：`--concurrency N`（缺省 **48** = 实测饱和点；
+`--concurrency 1` = 原串行行为）。设备建议 **cpu**（缺省即是）：cuda 仅在宽度 ≤8 且
+跨 GPU 轮转时按 run 占优（+21%），tune 池无法逐 worker 钉卡故不推荐；个别单试验长跑
+（如 Stage-0 8000ep 锚点重跑）可用 `CUDA_VISIBLE_DEVICES=<空闲卡> --device cuda
+--concurrency 1` 拿 1.2×。worker 子进程环境已强制 `OMP_NUM_THREADS=MKL_NUM_THREADS=1`
+（决策 c），无需手工设置：
+
+```bash
+.venv/bin/python -m trl_sb3.run tune --trials config/trials_stage_a.yaml                 # 缺省 --concurrency 48
+.venv/bin/python -m trl_sb3.run tune --trials config/trials_stage_a.yaml --concurrency 1 --device cpu  # 串行(旧行为)
+```
+
+**决策 (b)——主表 sweep `--filter` 多进程**：sweep 自身单进程，按场景子串切 N 个后台
+shell 并行；run 目录幂等（DONE 跳过 + SKIP-DONE episodes 守卫），**不同 filter 子串的
+任务集不相交**（子串命中 arm 或 topo 名）。4 场景天然四分；注意两点：`--filter CERNET.gml`
+不会命中 `CERNET_failure.gml`（子串带 `.gml` 后缀才安全，裸 `CERNET` 会两 scenario 都中）；
+**预训练任务的 topo=源域 CERNET.gml，会落进 `CERNET.gml` 那路 shell**——迁移臂的
+lineage 源在那里，故先把 `CERNET.gml` shell 跑起来（或跑完）再启动其余三路，否则其余
+shell 的 A2/A3/A5/A6/A0 行会 SKIP-LINEAGE 跳过（不失败；补跑该 shell 即可，幂等）。
+自定义切分先各路 `--dry-run` 核对任务集：
+
+```bash
+# 4× cpu shell(简单,聚合 ~9 eps/s 起,核多可加到 8-16 shell;CERNET.gml 路含预训练,排首)
+for topo in CERNET.gml CERNET_failure Abilene NFSCNET; do
+  nohup .venv/bin/python -m trl_sb3.run sweep --grid config/grid_main.yaml \
+    --device cpu --filter "$topo" > "sweep_$topo.log" 2>&1 &
+done
+# 或 4× cuda shell(逐 shell 钉一张空闲卡,比 4×cpu 快 ~20%;别用被占用的 GPU0)
+i=1; for topo in CERNET.gml CERNET_failure Abilene NFSCNET; do
+  CUDA_VISIBLE_DEVICES=$i nohup .venv/bin/python -m trl_sb3.run sweep \
+    --grid config/grid_main.yaml --device cuda --filter "$topo" > "sweep_$topo.log" 2>&1 &
+  i=$((i+1))
+done
+wait
+```
+
+注意 `CERNET.gml` 与 `CERNET_failure.gml` 子串有前缀重叠：`--filter CERNET.gml` 不会命中
+`CERNET_failure.gml`（子串带 `.gml` 后缀），四路切分安全。四路并发启动时若 `CERNET.gml`
+路的预训练尚未 DONE，其余路的迁移臂会 SKIP-LINEAGE 跳过（不失败）——跑完预训练后把
+跳过的 shell 原命令重跑一遍即可（幂等，DONE 行零成本跳过）；严格一点可先单独把
+`CERNET.gml` 路跑到预训练 DONE 再放其余三路。
+
+**决策 (c)——CPU 侧线程配比**：多进程执行时每 worker 强制 1 线程（`OMP_NUM_THREADS`
+=`MKL_NUM_THREADS`=`1`；tune.py 已内建，手工多进程 shell 请自设）。实测 N=48 下
+threads=1 聚合 38.0 vs threads=2 的 32.0 eps/s，缺省 32 线程直接瘫痪（>25min 未完成）。
+单进程跑（不经并发池）不必设置——单 run 多线程无害（2.29 vs 2.25 eps/s，噪声内）。
+线程数不改数值：8 回合 CPU 对照 `eval.json`/`metrics.csv` sha256 双双相同（位同证据，
+`profiling/report.md` §threads-numeric）。
+
+**GPU 使用备注**：同 GPU 堆多进程吃不满（kernel 微小 + CPU 步进是天花板，详见 report
+§7）；要上 cuda 就跨卡轮转（每进程一张卡）。MPS（`nvidia-cuda-mps-control`）是管理员级
+可选杠杆，可消 context 轮转开销，但对本负载测得差距无意义（cpu 池已 2× 于最优 cuda 配置）——
+仅当未来策略换成 CNN/GNN 等真 GPU 计算负载时再议。

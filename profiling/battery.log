@@ -1,0 +1,75 @@
+### startup probe (cpu dry-run subprocess)
+startup probe (dry-run subprocess, device=cpu, threads=1): wall=2.35s exit=0
+### cuda concurrency sweep, all workers pinned GPU1, threads=1
+/mnt/data/gsy/ppotl-routing/.venv/lib/python3.13/site-packages/stable_baselines3/common/on_policy_algorithm.py:150: UserWarning: You are trying to run PPO on the GPU, but it is primarily intended to run on the CPU when not using a CNN policy (you are using ActorCriticPolicy which should be a MlpPolicy). See https://github.com/DLR-RM/stable-baselines3/issues/1245 for more info. You can pass `device='cpu'` or `export CUDA_VISIBLE_DEVICES=` to force using the CPU.Note: The model will train, but the GPU utilization will be poor and the training might take longer than on CPU.
+  warnings.warn(
+[sweep] grid=/mnt/data/gsy/ppotl-routing/profiling/scratch/pool/conc_cuda1/N1/grid_task0.yaml tasks=1 dry_run=False device=cuda strict=False
+[sweep] Windows 长跑提醒（管理员 PowerShell）：powercfg /change standby-timeout-ac 0
+[sweep 1/1] NEW arm=pretrain topo=CERNET.gml rate=500 seed=20962 source=- episodes=20 run_id=pretrain-5bc23f2223
+[sweep] summary: planned=1 done=1 skipped_done=0 skipped_lineage=0 failed=0
+/mnt/data/gsy/ppotl-routing/.venv/lib/python3.13/site-packages/stable_baselines3/common/on_policy_algorithm.py:150: UserWarning: You are trying to run PPO on the GPU, but it is primarily intended to run on the CPU when not using a CNN policy (you are using ActorCriticPolicy which should be a MlpPolicy). See https://github.com/DLR-RM/stable-baselines3/issues/1245 for more info. You can pass `device='cpu'` or `export CUDA_VISIBLE_DEVICES=` to force using the CPU.Note: The model will train, but the GPU utilization will be poor and the training might take longer than on CPU.
+  warnings.warn(
+[sweep] grid=/mnt/data/gsy/ppotl-routing/profiling/scratch/pool/conc_cuda1/N1/grid_task1.yaml tasks=1 dry_run=False device=cuda strict=False
+[sweep] Windows 长跑提醒（管理员 PowerShell）：powercfg /change standby-timeout-ac 0
+[sweep 1/1] NEW arm=pretrain topo=CERNET.gml rate=500 seed=20963 source=- episodes=20 run_id=pretrain-62585a8692
+[sweep] summary: planned=1 done=1 skipped_done=0 skipped_lineage=0 failed=0
+/mnt/data/gsy/ppotl-routing/.venv/lib/python3.13/site-packages/stable_baselines3/common/on_policy_algorithm.py:150: UserWarning: You are trying to run PPO on the GPU, but it is primarily intended to run on the CPU when not using a CNN policy (you are using ActorCriticPolicy which should be a MlpPolicy). See https://github.com/DLR-RM/stable-baselines3/issues/1245 for more info. You can pass `device='cpu'` or `export CUDA_VISIBLE_DEVICES=` to force using the CPU.Note: The model will train, but the GPU utilization will be poor and the training might take longer than on CPU.
+  warnings.warn(
+[sweep] grid=/mnt/data/gsy/ppotl-routing/profiling/scratch/pool/conc_cuda1/N1/grid_task2.yaml tasks=1 dry_run=False device=cuda strict=False
+[sweep] Windows 长跑提醒（管理员 PowerShell）：powercfg /change standby-timeout-ac 0
+[sweep 1/1] NEW arm=pretrain topo=CERNET.gml rate=500 seed=20964 source=- episodes=20 run_id=pretrain-f18cc9d3ad
+[sweep] summary: planned=1 done=1 skipped_done=0 skipped_lineage=0 failed=0
+/mnt/data/gsy/ppotl-routing/.venv/lib/python3.13/site-packages/stable_baselines3/common/on_policy_algorithm.py:150: UserWarning: You are trying to run PPO on the GPU, but it is primarily intended to run on the CPU when not using a CNN policy (you are using ActorCriticPolicy which should be a MlpPolicy). See https://github.com/DLR-RM/stable-baselines3/issues/1245 for more info. You can pass `device='cpu'` or `export CUDA_VISIBLE_DEVICES=` to force using the CPU.Note: The model will train, but the GPU utilization will be poor and the training might take longer than on CPU.
+  warnings.warn(
+[sweep] grid=/mnt/data/gsy/ppotl-routing/profiling/scratch/pool/conc_cuda1/N1/grid_task3.yaml tasks=1 dry_run=False device=cuda strict=False
+[sweep] Windows 长跑提醒（管理员 PowerShell）：powercfg /change standby-timeout-ac 0
+[sweep 1/1] NEW arm=pretrain topo=CERNET.gml rate=500 seed=20965 source=- episodes=20 run_id=pretrain-50feef1fb7
+[sweep] summary: planned=1 done=1 skipped_done=0 skipped_lineage=0 failed=0
+/mnt/data/gsy/ppotl-routing/.venv/lib/python3.13/site-packages/stable_baselines3/common/on_policy_algorithm.py:150: UserWarning: You are trying to run PPO on the GPU, but it is primarily intended to run on the CPU when not using a CNN policy (you are using ActorCriticPolicy which should be a MlpPolicy). See https://github.com/DLR-RM/stable-baselines3/issues/1245 for more info. You can pass `device='cpu'` or `export CUDA_VISIBLE_DEVICES=` to force using the CPU.Note: The model will train, but the GPU utilization will be poor and the training might take longer than on CPU.
+  warnings.warn(
+[sweep] grid=/mnt/data/gsy/ppotl-routing/profiling/scratch/pool/conc_cuda1/N1/grid_task4.yaml tasks=1 dry_run=False device=cuda strict=False
+[sweep] Windows 长跑提醒（管理员 PowerShell）：powercfg /change standby-timeout-ac 0
+[sweep 1/1] NEW arm=pretrain topo=CERNET.gml rate=500 seed=20966 source=- episodes=20 run_id=pretrain-029199fe75
+[sweep] summary: planned=1 done=1 skipped_done=0 skipped_lineage=0 failed=0
+/mnt/data/gsy/ppotl-routing/.venv/lib/python3.13/site-packages/stable_baselines3/common/on_policy_algorithm.py:150: UserWarning: You are trying to run PPO on the GPU, but it is primarily intended to run on the CPU when not using a CNN policy (you are using ActorCriticPolicy which should be a MlpPolicy). See https://github.com/DLR-RM/stable-baselines3/issues/1245 for more info. You can pass `device='cpu'` or `export CUDA_VISIBLE_DEVICES=` to force using the CPU.Note: The model will train, but the GPU utilization will be poor and the training might take longer than on CPU.
+  warnings.warn(
+[sweep] grid=/mnt/data/gsy/ppotl-routing/profiling/scratch/pool/conc_cuda1/N1/grid_task5.yaml tasks=1 dry_run=False device=cuda strict=False
+[sweep] Windows 长跑提醒（管理员 PowerShell）：powercfg /change standby-timeout-ac 0
+[sweep 1/1] NEW arm=pretrain topo=CERNET.gml rate=500 seed=20967 source=- episodes=20 run_id=pretrain-ae249ad5e6
+[sweep] summary: planned=1 done=1 skipped_done=0 skipped_lineage=0 failed=0
+/mnt/data/gsy/ppotl-routing/.venv/lib/python3.13/site-packages/stable_baselines3/common/on_policy_algorithm.py:150: UserWarning: You are trying to run PPO on the GPU, but it is primarily intended to run on the CPU when not using a CNN policy (you are using ActorCriticPolicy which should be a MlpPolicy). See https://github.com/DLR-RM/stable-baselines3/issues/1245 for more info. You can pass `device='cpu'` or `export CUDA_VISIBLE_DEVICES=` to force using the CPU.Note: The model will train, but the GPU utilization will be poor and the training might take longer than on CPU.
+  warnings.warn(
+[sweep] grid=/mnt/data/gsy/ppotl-routing/profiling/scratch/pool/conc_cuda1/N1/grid_task6.yaml tasks=1 dry_run=False device=cuda strict=False
+[sweep] Windows 长跑提醒（管理员 PowerShell）：powercfg /change standby-timeout-ac 0
+[sweep 1/1] NEW arm=pretrain topo=CERNET.gml rate=500 seed=20968 source=- episodes=20 run_id=pretrain-6b00d2f207
+[sweep] summary: planned=1 done=1 skipped_done=0 skipped_lineage=0 failed=0
+/mnt/data/gsy/ppotl-routing/.venv/lib/python3.13/site-packages/stable_baselines3/common/on_policy_algorithm.py:150: UserWarning: You are trying to run PPO on the GPU, but it is primarily intended to run on the CPU when not using a CNN policy (you are using ActorCriticPolicy which should be a MlpPolicy). See https://github.com/DLR-RM/stable-baselines3/issues/1245 for more info. You can pass `device='cpu'` or `export CUDA_VISIBLE_DEVICES=` to force using the CPU.Note: The model will train, but the GPU utilization will be poor and the training might take longer than on CPU.
+  warnings.warn(
+[sweep] grid=/mnt/data/gsy/ppotl-routing/profiling/scratch/pool/conc_cuda1/N1/grid_task7.yaml tasks=1 dry_run=False device=cuda strict=False
+[sweep] Windows 长跑提醒（管理员 PowerShell）：powercfg /change standby-timeout-ac 0
+[sweep 1/1] NEW arm=pretrain topo=CERNET.gml rate=500 seed=20969 source=- episodes=20 run_id=pretrain-1fe5ac0107
+[sweep] summary: planned=1 done=1 skipped_done=0 skipped_lineage=0 failed=0
+/mnt/data/gsy/ppotl-routing/.venv/lib/python3.13/site-packages/stable_baselines3/common/on_policy_algorithm.py:150: UserWarning: You are trying to run PPO on the GPU, but it is primarily intended to run on the CPU when not using a CNN policy (you are using ActorCriticPolicy which should be a MlpPolicy). See https://github.com/DLR-RM/stable-baselines3/issues/1245 for more info. You can pass `device='cpu'` or `export CUDA_VISIBLE_DEVICES=` to force using the CPU.Note: The model will train, but the GPU utilization will be poor and the training might take longer than on CPU.
+  warnings.warn(
+/mnt/data/gsy/ppotl-routing/.venv/lib/python3.13/site-packages/stable_baselines3/common/on_policy_algorithm.py:150: UserWarning: You are trying to run PPO on the GPU, but it is primarily intended to run on the CPU when not using a CNN policy (you are using ActorCriticPolicy which should be a MlpPolicy). See https://github.com/DLR-RM/stable-baselines3/issues/1245 for more info. You can pass `device='cpu'` or `export CUDA_VISIBLE_DEVICES=` to force using the CPU.Note: The model will train, but the GPU utilization will be poor and the training might take longer than on CPU.
+  warnings.warn(
+[sweep] grid=/mnt/data/gsy/ppotl-routing/profiling/scratch/pool/conc_cuda1/N2/grid_task1.yaml tasks=1 dry_run=False device=cuda strict=False
+[sweep] Windows 长跑提醒（管理员 PowerShell）：powercfg /change standby-timeout-ac 0
+[sweep 1/1] NEW arm=pretrain topo=CERNET.gml rate=500 seed=20121 source=- episodes=20 run_id=pretrain-3cc947aad5
+[sweep] summary: planned=1 done=1 skipped_done=0 skipped_lineage=0 failed=0
+[sweep] grid=/mnt/data/gsy/ppotl-routing/profiling/scratch/pool/conc_cuda1/N2/grid_task0.yaml tasks=1 dry_run=False device=cuda strict=False
+[sweep] Windows 长跑提醒（管理员 PowerShell）：powercfg /change standby-timeout-ac 0
+[sweep 1/1] NEW arm=pretrain topo=CERNET.gml rate=500 seed=20120 source=- episodes=20 run_id=pretrain-c1e16a94da
+[sweep] summary: planned=1 done=1 skipped_done=0 skipped_lineage=0 failed=0
+/mnt/data/gsy/ppotl-routing/.venv/lib/python3.13/site-packages/stable_baselines3/common/on_policy_algorithm.py:150: UserWarning: You are trying to run PPO on the GPU, but it is primarily intended to run on the CPU when not using a CNN policy (you are using ActorCriticPolicy which should be a MlpPolicy). See https://github.com/DLR-RM/stable-baselines3/issues/1245 for more info. You can pass `device='cpu'` or `export CUDA_VISIBLE_DEVICES=` to force using the CPU.Note: The model will train, but the GPU utilization will be poor and the training might take longer than on CPU.
+  warnings.warn(
+/mnt/data/gsy/ppotl-routing/.venv/lib/python3.13/site-packages/stable_baselines3/common/on_policy_algorithm.py:150: UserWarning: You are trying to run PPO on the GPU, but it is primarily intended to run on the CPU when not using a CNN policy (you are using ActorCriticPolicy which should be a MlpPolicy). See https://github.com/DLR-RM/stable-baselines3/issues/1245 for more info. You can pass `device='cpu'` or `export CUDA_VISIBLE_DEVICES=` to force using the CPU.Note: The model will train, but the GPU utilization will be poor and the training might take longer than on CPU.
+  warnings.warn(
+[sweep] grid=/mnt/data/gsy/ppotl-routing/profiling/scratch/pool/conc_cuda1/N2/grid_task3.yaml tasks=1 dry_run=False device=cuda strict=False
+[sweep] Windows 长跑提醒（管理员 PowerShell）：powercfg /change standby-timeout-ac 0
+[sweep 1/1] NEW arm=pretrain topo=CERNET.gml rate=500 seed=20123 source=- episodes=20 run_id=pretrain-82d6328281
+[sweep] summary: planned=1 done=1 skipped_done=0 skipped_lineage=0 failed=0
+[sweep] grid=/mnt/data/gsy/ppotl-routing/profiling/scratch/pool/conc_cuda1/N2/grid_task2.yaml tasks=1 dry_run=False device=cuda strict=False
+[sweep] Windows 长跑提醒（管理员 PowerShell）：powercfg /change standby-timeout-ac 0
+[sweep 1/1] NEW arm=pretrain topo=CERNET.gml rate=500 seed=20122 source=- episodes=20 run_id=pretrain-381b7ecc86
+[sweep] summary: planned=1 done=1 skipped_done=0 skipped_lineage=0 failed=0

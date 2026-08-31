@@ -1,0 +1,223 @@
+# config/tuning_prereg.yaml — Phase-1 调参预注册(论文第三根预注册支柱,计划 §2 末段)
+# 唯一事实来源:.omo/plans/experiment-execution-plan.md §1(红线)+ §3.1-§3.4(调参协议)。
+# 本文件在搜索跑之前提交;机器可查结构由 tests/test_tuning_prereg.py 锁定。
+# 任何偏离须显式修订本文件(升 meta.version 并留痕),禁止事后追认或静默改规则。
+# 引用约定:incumbent 超参值一律按 config/default.yaml paper_defaults 的 key 路径引用,
+# 不复制数值(单一事实来源);搜索网格字面值(lr/ent/hidden)是搜索定义本身,不构成复制。
+
+# —— meta:预注册身份(任务 1)——
+meta:
+  status: pre_registered_before_phase1_execution  # 先于任何 Phase-1 执行提交
+  date: "2026-08-30"                              # 引号防 YAML date 类型化
+  version: 3
+  change_log:
+    - {version: 3, date: "2026-08-31", change: "执行前裁决(计划 §10 前置 1,推荐项):stage_0_anchor 2000ep 锚点补齐 seeds [100,101,102](9 配对点歧义闭合);incumbent_plateau 聚合口径钉死:9 条曲线(3 目标 × 3 种子)逐条判 <0.1σ̄ 全满足(保守合取);其余条款不变"}
+    - {version: 2, date: "2026-08-30", change: "D4 用户裁决:adapt_guard.arms [A6, A2] -> [A6];其余条款不变"}
+    - {version: 1, date: "2026-08-30", change: 初始预注册}
+  plan: .omo/plans/experiment-execution-plan.md
+  authority: "§1(红线)+ §3.1-§3.4(协议);§2 末段要求本文件在搜索跑之前提交"
+  deviation_rule: 本文件提交后,Phase-1 执行中的任何偏离都必须显式修订本文件(升 version 并留痕),不得事后追认
+  related: "config/metrics_prereg.yaml(window_episodes → W-AUC(500) 窗口;final_eval_episodes → zeroshot 回合数单一事实来源)"
+
+# —— red_lines:§1 四条红线,逐条固化(任务 2)——
+red_lines:
+  dev_eval_separation:
+    rule: 调参选择只触碰 3 选择目标 + 2 holdout 诊断目标
+    never_in_selection:
+      - 主表 4 场景(default.yaml scenarios,含两条压力轴)
+      - 预训练源 CERNET@500(default.yaml pretrain)
+      - 试点/主表种子流 {0..9}
+  single_global_config: 全臂共享一份全局配置,禁逐臂调参;基线零参数=固定杆
+  freeze_before_prereg: θ/W/k 只从冻结后的试点数据回填(metrics_prereg.yaml);调参种子 {100,101,102}
+  artifact_isolation: run_id 无超参因素 → 调参产物一律隔离 runs_tune/<tag>/;任何 config 变更不得静默依赖 DONE 跳过(§2 缝 4 碰撞守卫)
+
+# —— selection_set:§3.1 dev 基准(任务 3)——
+selection_set:
+  axis_scope: 仅拓扑轴;链接故障与 3× 负载两条压力轴整体留出选择
+  targets:  # 3 选择目标,精确仓库文件名
+    - {topo: Claranet.gml, avgrate: 500}
+    - {topo: Gridnet.gml, avgrate: 500}
+    - {topo: NSF.gml, avgrate: 500}
+  holdout_diagnostics:  # 只跑 incumbent + winner,只报告(机械门见 holdout_mechanical_gate)
+    - {topo: Claranet_failure.gml, avgrate: 500}
+    - {topo: Claranet.gml, avgrate: 1000}
+  stress_axes_note: 两条压力轴从不出现于调参,压力下的表现是迁移而非调参覆盖(论文杀句);代价:ε 从 0.33σ̄ 放宽到 0.47σ̄(保守,偏向保留论文默认)
+
+# —— seeds:§3.1 种子流(任务 4)——
+seeds:
+  tune: [100, 101, 102]
+  pilot: [0, 1, 2]
+  main: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+  exclusion: 种子已是 run_id 因素,天然分离;试点/主表种子流 {0..9} 一律不参与选择(红线 1)
+
+# —— incumbent:现默认=论文超参,按 key 路径引用不复制(单一事实来源规则)——
+incumbent:
+  source: config/default.yaml
+  section: paper_defaults
+  search_axis_keys:  # 搜索轴 → incumbent 键路径(供"更少改轴"平手规则逐 key 比对)
+    lr: ppo.learning_rate
+    opt: ppo.lr_critic_ratio  # 现值 null = 单 Adam 现状
+    ent: ppo.ent_coef
+    hidden: net.layers
+
+# —— stage_0_anchor:§3.2 锚点与 σ̄ 估计量钉死(任务 5)——
+stage_0_anchor:
+  incumbent_source: "config/default.yaml#paper_defaults(超参值不复制,按 key 路径引用)"
+  runs:
+    - {episodes: 2000, seeds: [100, 101, 102]}
+    - {episodes: 8000, seeds: [100, 101, 102]}
+  outputs:
+    sigma_bar:  # σ̄ 估计量在此钉死(MAJOR:估计量入 prereg)
+      definition: "per-target sample SD (ddof=1, n=3) of zeroshot final r_mean across tune seeds, averaged over the 3 selection targets"
+      report_requirements:
+        - 置信区间(n=3 的 SD 估计 CI 很宽,§3.2 原文要求报告)
+        - ε 敏感性(ε 对 σ̄ 的敏感性与该 CI 联动呈现)
+    per_episode_interaction_sd: 逐回合交互 SD(噪声模型),随锚点产出
+    proxy_validity_check: 见 proxy_validity 节(gate 修正版)
+
+# —— proxy_validity:§3.2 gate 修正(gate 修正:弃用 3 点 Spearman — n=3 退化为 {−1,−.5,.5,1})(任务 6)——
+proxy_validity:
+  paired_points:
+    count: 9
+    construction: 3 选择目标 × 3 调参种子;同种子同目标的 2000ep 与 8000ep 分数配对
+    statistic: spearman_rho
+    threshold: 0.6
+    criterion: "ρ ≥ 0.6"
+    ambiguity_flag: >-
+      计划内张力(按字面编码,不擅自消解):§3.2 锚点仅明示 incumbent@2000ep×seed100,
+      而 9 个配对点需要全部 3 个调参种子的 2000ep 分数;seeds 101/102 的 2000ep 行
+      依配对定义隐含需要 — 执行前须裁决补齐方式并(如需)修订本文件。
+    resolution: >-
+      2026-08-31 执行前裁决(计划 §10 前置 1,推荐项):采纳推荐项 — stage_0_anchor
+      的 2000ep 锚点行补齐全部 3 个调参种子(seeds [100,101,102]),9 个配对点依构造
+      全部存在,隐含缺口闭合;ambiguity_flag 原文保留作审计线索。
+  incumbent_plateau:  # incumbent 2000ep 评估曲线近平台的机械定义
+    mechanical_definition: "末 500ep 均值 − 前 500ep 均值 < 0.1σ̄"
+    plateau_sigma_coefficient: 0.1
+    mechanical_aggregation: >-
+      判据在 9 条曲线(3 选择目标 × 3 调参种子)上逐条独立评估;曲线取 incumbent
+      2000ep 锚点 runs 的周期性 eval r_mean(metrics.csv;eval_interval=100 → 前 500ep
+      = episodes ≤ 500 的 eval 点,末 500ep = episodes > 1500 的 eval 点);全部 9 条
+      逐一满足不等式方算通过(保守合取;任一违反 → conservative_branch)。
+  conservative_branch:
+    trigger: Spearman ρ≥0.6 与平台判据任一不满足
+    rule: 仅 ≥2ε 的 Stage-A 效应可晋级(保守分支为缺省)
+    min_effect_epsilon_multiplier: 2
+
+# —— stage_a:§3.2 筛选(任务 7)——
+stage_a:
+  trials: 10        # 含默认行,默认与 Stage-0 锚点同 tag 去重后不重跑
+  seed: 100
+  episodes: 2000
+  blocks:
+    block1:
+      lr: [3.0e-6, 6.0e-6, 2.0e-5]
+      opt: [single, dual]
+      trials: 6
+      note: (6e-6, single) 与 incumbent 重合(ppo.learning_rate=6.0e-6、lr_critic_ratio=null 单 Adam),按 Stage-0 锚点同 tag 去重
+    block2:
+      conditioned_on: best(lr, opt)  # Block1 赢家
+      ent: [0.01, 0.1]
+      trials: 2
+    block3:
+      conditioned_on: best(lr, opt)
+      hidden: [[256, 128], [64, 64]]
+      trials: 2
+  advancement:
+    delta_formula: "δ = 0.5σ̄"
+    rule: Stage-A 最优的 δ 以内取 top-2 非 incumbent 晋级
+  known_limitations:  # §3.2 要求在 prereg 披露
+    - 贪心分块以 1 种子噪声连锁选点
+    - ent/hidden 条件于 Block1 赢家,欠探索
+    - '"更少改轴"平手规则部分兜底(缓解,非消除)'
+    - σ̄ 在 8000ep 测、用于 2000ep 筛选,反保守(假阳性),由 Stage-B 3 种子全保真复检兜住
+
+# —— stage_b:§3.2 确认(任务 8)——
+stage_b:
+  candidates: 2
+  episodes: 8000
+  seeds: [100, 101, 102]
+  zeroshot:
+    episodes: 10
+    targets: "selection_set.targets(3 选择目标)"
+    note: >-
+      §3.2 字面 "zeroshot 10 回合";与 config/metrics_prereg.yaml final_eval_episodes
+      (D1 裁定=10,并行任务落盘)同源对齐 — 该字段是单一事实来源,若其定案值与本处
+      不一致,以 metrics_prereg 为准并显式修订本文件。
+  incumbent_reuse: incumbent 不重跑,复用 Stage-0 锚点 @8000ep×3 种子行(§3.2 要求本文件明示该复用)
+
+# —— adapt_guard:§3.2 gate 修正后 + D4 修订(任务 9)——
+adapt_guard:
+  arms: [A6]  # D4(2026-08-30,用户指令):仅全方法 — 调参只为全方法服务,验证也只在全方法上做;主表臂范围不受影响
+  arm_notes:
+    A6: 全方法,冻结躯干
+    A2_removed: D4 用户裁决移出守卫(原 BLOCKER 修复的 lr 哨兵退役,§9-D4);已接受残余风险:只对全微调不稳的 winner 会被 A6 冻结躯干掩盖,由主表各臂自身运行可见性兜底
+  configs: [winner, incumbent]
+  targets:
+    - {topo: Claranet.gml, avgrate: 500, role: 常载}
+    - {topo: Claranet_failure.gml, avgrate: 500, role: 压力轴}
+  seeds: [100, 101, 102]
+  adapt_episodes: 1000
+  runner_up_excluded: runner-up 移出守卫 — 决策相关比较是 winner vs incumbent;其 Stage-B zeroshot 数据仍在
+
+# —— winner_rule:§3.3(任务 10)——
+winner_rule:
+  score:
+    formula: "Score(C) = mean_{t,s} ZS − 0.5·(mean_t − min_t mean_s ZS)"
+    note: 选择集上的软最坏惩罚
+  hard_gates:
+    gate1_adapt_score: "adapt 分 ≥ incumbent − ε"
+    gate2_wauc500: "adapt 守卫曲线的 W-AUC(500) ≥ incumbent − ε(主终点保护,gate 新增 BLOCKER 修复,零额外算力)"
+  wauc500:
+    definition: adapt 守卫曲线首 500 回合的梯形面积,免阈值(τ 需 θ 而 θ 未回填,红线 3)
+    window_episodes_source: "config/metrics_prereg.yaml window_episodes(现值 500)"
+  tie_chain:  # 平手链,依序
+    - adapt 分
+    - 更少改轴(离 paper_defaults,按 incumbent.search_axis_keys 逐 key 比对)
+    - 更小网络
+  epsilon:
+    formula: "ε = max(0.005, 0.47σ̄)"
+    floor: 0.005
+    sigma_multiplier: 0.47
+    derivation_note: "s=3, T=3 口径(§3.3);推导与敏感性须随本 prereg 提交并在调参报告附表(§3.4b)呈现"
+    sensitivity_requirement: ε 对 σ̄ 的敏感性必须与 σ̄ 置信区间联动报告
+    widening_note: "选择集剔除压力轴的代价:ε 从 0.33σ̄ 放宽到 0.47σ̄(§3.1,保守,偏向保留论文默认)"
+
+# —— holdout_mechanical_gate:§3.1 机械单侧门(gate 裁决,替换"人工裁决")(任务 11)——
+holdout_mechanical_gate:
+  trigger: "winner 在任一 holdout 目标的 ZS 均值 < incumbent − ε"
+  action_revert: 回退 incumbent
+  action_else: 否则照常(进入 Phase-2 冻结门)
+  forbidden: 禁止其他动作;人只验算术
+  targets_source: "selection_set.holdout_diagnostics({Claranet_failure@500, Claranet@1000})"
+
+# —— stopping_rule:§3.3(任务 12)——
+stopping_rule:
+  rule: 无候选以 ≥ε 胜过 incumbent → 保留论文默认
+  exit_record: Phase-1 以"结果"记档退出(不是失败)
+
+# —— execution_concurrency:§2 第 6 条/§6,纯执行参数(任务 13)——
+execution_concurrency:
+  value: 48  # 2026-08-30 定案回填(留痕):Phase-0 §2.6 GPU 利用率画像实测——cpu 路线稳态饱和点(200ep 任务 N32→48 聚合边际 +25%,N64 边际 +1.3%<5% 停;20ep 电池同膝;证据 profiling/report.md §4-§5);占位契约的预期回填,非规则偏离
+  scope: 只影响执行(tune.py 受控并发池),绝不影响任何选择准则/门槛/公式
+
+# —— search_space_to_overlay_mapping:§2 缝 1/缝 3/缝 4(任务 14)——
+search_space_to_overlay_mapping:
+  axes:
+    lr: ppo.learning_rate
+    opt: ppo.lr_critic_ratio  # single=null(单 Adam 现状);dual=0.1(legacy actor/critic=10×,§2 缝 3)
+    ent: ppo.ent_coef
+    hidden: net.layers
+  overlay_node: grid 的 config_overlay 深合并节点(ppo/net/paths/freeze,§2 缝 1)
+  tag_convention: "<cfg>_a2000 / <cfg>_b8000"
+  tag_rationale: tag 必须编码阶段与集数,防 Stage-B 被 Stage-A 的 DONE 静默跳过(§2 缝 4 tune.py 契约)
+  isolation: 逐试验落 runs_tune/<tag>/(run_id 无超参因素,红线 4;碰撞守卫:同 tag + 不同 overlay hash / 不同 commit → 拒绝)
+
+# —— deliverables:§3.4(a)-(d)(任务 15)——
+deliverables:
+  a: winner 的 default.yaml paper_defaults v2 diff
+  b: 调参报告 runs_tune/summary.csv(试验→阶段→dev 指标)+ σ̄/ε 敏感性附表
+  c: >-
+    DEVIATIONS #3 裁决条目:单/双 lr 由 Phase-1 搜索定,取代 M3 损失曲线裁决场所
+    (RUNBOOK/PLAN 相应修订;tex:462 无论胜负都必须对齐 — 后续文档工作,非调参会话内完成)
+  d: tuning_prereg.yaml + 全配置 dev 表(附录素材)

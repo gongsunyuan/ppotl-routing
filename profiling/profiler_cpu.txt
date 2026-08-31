@@ -1,0 +1,44 @@
+# torch.profiler segment: device=cpu, 2 rollouts (2 PPO updates), seed=777
+
+## sorted by self_cpu_time_total
+
+-------------------------------------------------------  ------------  ------------  ------------  ------------  ------------  ------------  
+                                                   Name    Self CPU %      Self CPU   CPU total %     CPU total  CPU time avg    # of Calls  
+-------------------------------------------------------  ------------  ------------  ------------  ------------  ------------  ------------  
+                               Optimizer.step#Adam.step        30.46%     101.573ms        36.59%     122.045ms       6.102ms            20  
+                                            aten::addmm        11.72%      39.077ms        13.98%      46.621ms      47.964us           972  
+                                            aten::copy_         5.07%      16.924ms         5.07%      16.924ms       4.187us          4042  
+                                               aten::mm         5.07%      16.898ms         5.10%      16.999ms      84.993us           200  
+                           aten::_prelu_kernel_backward         4.96%      16.541ms         5.01%      16.709ms     208.867us            80  
+                                              aten::sum         2.79%       9.319ms         3.29%      10.960ms      18.267us           600  
+                                    aten::_prelu_kernel         2.66%       8.877ms         3.42%      11.392ms      17.579us           648  
+                                         aten::_to_copy         1.76%       5.860ms         5.94%      19.823ms       7.110us          2788  
+                                    aten::empty_strided         1.53%       5.108ms         1.53%       5.108ms       1.348us          3790  
+                                              aten::div         1.10%       3.670ms         1.62%       5.402ms      10.388us           520  
+                                       aten::as_strided         1.08%       3.618ms         1.08%       3.618ms       0.769us          4706  
+                                                aten::t         1.06%       3.519ms         2.08%       6.945ms       4.919us          1412  
+                                             aten::view         1.04%       3.460ms         1.04%       3.460ms       2.605us          1328  
+                                             aten::mul_         1.00%       3.329ms         1.36%       4.550ms       7.109us           640  
+                                              aten::sub         0.97%       3.242ms         1.04%       3.453ms       9.086us           380  
+                                               aten::to         0.95%       3.162ms         6.89%      22.984ms       5.306us          4332  
+                                              aten::mul         0.94%       3.123ms         1.25%       4.163ms      11.500us           362  
+                                               aten::eq         0.92%       3.084ms         1.38%       4.591ms       9.181us           500  
+                                             aten::add_         0.90%       2.997ms         1.63%       5.435ms       6.470us           840  
+                                             aten::sqrt         0.85%       2.831ms         0.85%       2.831ms       8.846us           320  
+                                         aten::_softmax         0.82%       2.747ms         0.82%       2.747ms      22.895us           120  
+                                        aten::logsumexp         0.79%       2.637ms         6.84%      22.812ms      95.051us           240  
+                                              aten::all         0.79%       2.636ms         0.96%       3.193ms       8.871us           360  
+                                      aten::multinomial         0.69%       2.311ms         3.32%      11.088ms     110.880us           100  
+                                           aten::linear         0.65%       2.184ms        16.10%      53.710ms      55.258us           972  
+                               aten::linalg_vector_norm         0.64%       2.133ms         0.79%       2.632ms       7.742us           340  
+                     Optimizer.zero_grad#Adam.zero_grad         0.63%       2.105ms         0.63%       2.105ms     105.245us            20  
+                                        aten::transpose         0.62%       2.071ms         1.03%       3.426ms       2.426us          1412  
+                                           aten::expand         0.61%       2.019ms         0.86%       2.864ms       2.486us          1152  
+                                            aten::lerp_         0.53%       1.776ms         0.53%       1.776ms       5.550us           320  
+                                        aten::remainder         0.52%       1.749ms         0.52%       1.749ms      14.575us           120  
+                                               aten::ge         0.52%       1.722ms         0.82%       2.720ms      10.460us           260  
+                                         aten::addcdiv_         0.51%       1.699ms         0.51%       1.699ms       5.309us           320  
+                                            aten::fill_         0.49%       1.650ms         0.49%       1.650ms       1.159us          1424  
+                                          aten::reshape         0.46%       1.521ms         1.37%       4.559ms       3.903us          1168  
+-------------------------------------------------------  ------------  ------------  ------------  ------------  ------------  ------------  
+Self CPU time total: 333.512ms

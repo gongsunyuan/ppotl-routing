@@ -25,6 +25,7 @@ paper_defaults:
     clip_range: 0.2         # eps_clip（F13）
     ent_coef: 0.05          # 实际步进的熵系数；legacy main.py:257 的 0.01 是死变量（F12）
     learning_rate: 6.0e-6   # 单 Adam lr；弃 legacy 双 lr（10x）与 actor wd=1e-4（D3/DEVIATIONS #3）
+    lr_critic_ratio: null   # 缝 3 双 lr 开关：null=单 Adam（D3 现状，逐位同旧行为）；float r=双参数组 Adam，critic 组 lr=actor 组 × r；0.1 复刻 legacy actor/critic=10x（actor 6e-6/critic 6e-7，DEVIATIONS #3）
     normalize_advantage: true  # D2
   net:
     layers: [287, 128, 64]  # actor/critic 躯干隐层；输入 7*41=287，输出头 Linear(64,3)（F2/D3）
@@ -38,10 +39,10 @@ paper_defaults:
   eval:
     deterministic: true     # 贪心评估（D8）
     eval_seed_base: 10000   # 固定评估回合流 seed = 10000 + i（D8）
-    eval_episodes: 5        # 评估回合数（D8）
+    eval_episodes: 10       # 评估回合数（D8 原定 5；D1 裁决 2026-08-30 统一 10：全行型 臂/A0/OSPF/启发式 同噪声地板）
     eval_interval: 100      # 训练中周期评估间隔（回合数），M3 可调（§5 曲线采样密度）
     ospf_action: 0          # OSPF 基线 = 全节点 action 0；legacy 注释 "hop count" 有误，实为 Σ1/μ 权重 k-最短首路径（F10/DEVIATIONS #8）
-    heuristic_episodes: 10  # 启发式基线（ECMP/LB/RR）评估回合数（§5 十评估种子协议，M2.5；与 OSPF/A0 的 eval_episodes=5 区分）
+    heuristic_episodes: 10  # 启发式基线（ECMP/LB/RR）评估回合数（§5 十评估种子协议，M2.5；D1 2026-08-30 后与 eval_episodes 同值 10，双轨退役）
   adapt:
     episodes: 1000          # 微调回合数（§5 主表适应预算；M3 校准，勿逐臂重调）
   pretrain:

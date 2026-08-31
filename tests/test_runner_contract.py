@@ -26,7 +26,7 @@ from trl_sb3.train.runner import run_arm
 TOPO = "Abilene.gml"
 RATE = 500
 STEPS_PER_EP = 50
-EVAL_EPISODES = 5
+EVAL_EPISODES = 10  # D1 裁决 2026-08-30：终评回合数全行型统一 10（原 5）
 COLUMNS = ["arm", "topo", "rate", "seed", "episode", "step", "rd", "rp", "th", "r_mean"]
 
 
@@ -103,7 +103,7 @@ def test_a3_loads_pretrained_source_and_finishes(
 
 def test_ospf_and_a0_zeroshot_eval_rows(cfg: dict[str, Any], pre_run: Path) -> None:
     """Given OSPF 恒 action 策略与预训练源 ckpt；When run_ospf_eval / run_zeroshot；
-    Then arm 列分别为 OSPF/A0、各 5 评估回合出数、A0 manifest 带 zero_shot 标记与源 run_id。"""
+    Then arm 列分别为 OSPF/A0、各 10 评估回合出数（D1 统一）、A0 manifest 带 zero_shot 标记与源 run_id。"""
     ospf_path = run_ospf_eval(TOPO, RATE, config=cfg)
     assert is_done(ospf_path)
     ospf_rows = _rows(ospf_path)
@@ -128,7 +128,7 @@ def test_failed_run_writes_traceback_without_done(
 ) -> None:
     """Given env.step 抛异常（A1+坏 env 注入，seed 区分 run_id）；When run_arm；
     Then 异常 re-raise、FAILED 含 traceback 与异常信息、无 DONE/ckpt。"""
-    def _boom(self: RoutingEnv, actions: Any) -> tuple[Any, ...]:
+    def _boom(_self: RoutingEnv, _actions: Any) -> tuple[Any, ...]:
         raise RuntimeError("boom-step")
 
     monkeypatch.setattr(RoutingEnv, "step", _boom)

@@ -1,0 +1,25 @@
+{
+  "device": "cpu",
+  "episodes": 100,
+  "seed": 777,
+  "wall_s": 34.655,
+  "eps_per_s": 2.8856,
+  "phases_s": {
+    "env_build": 0.103,
+    "model_build": 0.978,
+    "env_step": 15.948,
+    "env_reset": 0.093,
+    "greedy_eval_total": 3.488,
+    "learn_total": 31.963,
+    "ppo_train": 8.3
+  },
+  "derived_s": {
+    "setup_env_model": 1.082,
+    "post_learn_eval_and_io": 1.61,
+    "rollout_excl_train_eval": 20.174,
+    "env_step_share_of_learn_pct": 50.2,
+    "greedy_eval_calls_periodic": 1,
+    "greedy_eval_calls_final": 1
+  },
+  "cuda_visible_devices": ""
+}

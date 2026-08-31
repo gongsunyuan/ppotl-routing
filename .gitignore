@@ -5,3 +5,6 @@ __pycache__/
 .pytest_cache/
 ckpts_smoke/
 logs/
+profiling/scratch/
+runs_tune/
+.omo/

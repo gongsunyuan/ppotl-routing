@@ -9,6 +9,7 @@ multiprocessing（Windows spawn 守卫；M3/M4 长跑由用户自管进程）。
 
 from __future__ import annotations
 
+import json
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -49,14 +50,27 @@ class SweepSummary:
 
 
 def _merged_config(grid: dict[str, Any], base_cfg: dict[str, Any]) -> dict[str, Any]:
-    """grid 预算字段并入 base config：pretrain.episodes / adapt.episodes。"""
+    """grid 预算字段并入 base config：pretrain.episodes / adapt.episodes；可选顶层
+    `config_overlay:` 节复用 merge() 深合并进任意子树（ppo/net/paths/freeze/
+    env/...），合入顺序在预算字段之后（overlay 优先）。
+
+    隔离契约（计划红线 §1.4）：run_id 不含任何超参因素 → 不同 overlay 的运行会
+    落进 SAME run 目录。超参 sweep 驱动方必须把产物隔离到独立根
+    （runs_tune/<tag>/，未来 tune.py seam），不得混入主表 runs/。"""
     overrides: dict[str, Any] = {}
     pretrain_episodes = (grid.get("pretrain") or {}).get("episodes")
     if pretrain_episodes is not None:
         overrides["pretrain"] = {"episodes": int(pretrain_episodes)}
     if grid.get("adapt_episodes") is not None:
         overrides["adapt"] = {"episodes": int(grid["adapt_episodes"])}
-    return merge(base_cfg, overrides)
+    cfg = merge(base_cfg, overrides)
+    overlay = grid.get("config_overlay")
+    if overlay is not None:
+        if not isinstance(overlay, dict):
+            raise ValueError(f"网格 config_overlay 必须为映射，got {type(overlay).__name__}")
+        if overlay:
+            cfg = merge(cfg, overlay)
+    return cfg
 
 
 def _pretrain_run_id(cfg: dict[str, Any], seed: int) -> str:
@@ -208,6 +222,28 @@ def _execute(task: RunTask, device: str) -> Path:
     )
 
 
+def _assert_skip_done_episodes(runs_root: Path, run_id: str, task: RunTask) -> None:
+    """SKIP-DONE 一致性守卫：DONE run 的 manifest episodes 必须等于当前计划的
+    task.episodes（eval/heuristic/训练预算的现值）。协议或配置变更（如 OSPF 评估
+    5→10）后 run_id 不变 → 陈旧 DONE 会被静默跳过并污染聚合表，此处改硬失败。"""
+    manifest_path = runs_root / run_id / "manifest.json"
+    try:
+        manifest: Any = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest_episodes = manifest["episodes"]
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        raise RuntimeError(
+            f"SKIP-DONE 守卫拒绝：run_id={run_id} 已 DONE 但 manifest.json 缺失或损坏"
+            + f"（{exc!r}）——陈旧/损坏产物不得静默跳过；删除 run 目录 "
+            + f"{runs_root / run_id} 后重跑，按当前配置重生成"
+        ) from exc
+    if manifest_episodes != task.episodes:
+        raise RuntimeError(
+            f"SKIP-DONE 守卫拒绝：run_id={run_id} 的 manifest episodes={manifest_episodes!r} "
+            + f"与当前计划 episodes={task.episodes} 不一致（配置/协议变更后的陈旧 DONE，"
+            + f"静默跳过会污染聚合表）；删除 run 目录 {runs_root / run_id} 后重跑，按当前配置重生成"
+        )
+
+
 def run_sweep(
     grid_path: str | Path,
     *,
@@ -220,7 +256,9 @@ def run_sweep(
 ) -> SweepSummary:
     """执行（或仅规划）一次 sweep，返回并打印 SweepSummary。
 
-    守卫顺序（逐任务）：DONE 跳过 → lineage 校验 → 执行。dry_run 时计划内的预训练
+    守卫顺序（逐任务）：DONE 跳过（含 manifest episodes==计划 episodes 断言——
+    陈旧/损坏产物硬失败而非静默跳过，dry-run 冻结门同样触发）→ lineage 校验 →
+    执行。dry_run 时计划内的预训练
     视为将来可用源（只规划不执行）；单 run 异常捕获记 failed 继续（--strict 仅
     作用于 lineage 拒绝）；base_config 注入测试用 config（缺省 default.yaml）。
     """
@@ -249,13 +287,14 @@ def run_sweep(
             status = "NEW"
         print(
             f"[sweep {index}/{len(tasks)}] {status} arm={task.arm} topo={task.topo} "
-            f"rate={task.rate} seed={task.seed} source={task.source_run_id or '-'} "
-            f"episodes={task.episodes} run_id={run_id}"
+            + f"rate={task.rate} seed={task.seed} source={task.source_run_id or '-'} "
+            + f"episodes={task.episodes} run_id={run_id}"
         )
         if status == "SKIP-LINEAGE" and strict:
             raise RuntimeError(f"lineage 守卫拒绝（--strict）：{task.arm} 的源 {task.source_run_id} 缺 ckpt 或未 DONE")
         if dry_run or status != "NEW":
             if status == "SKIP-DONE":
+                _assert_skip_done_episodes(runs_root, run_id, task)
                 skipped_done += 1
             elif status == "SKIP-LINEAGE":
                 skipped_lineage += 1
@@ -271,6 +310,6 @@ def run_sweep(
     )
     print(
         f"[sweep] summary: planned={summary.planned} done={summary.done} "
-        f"skipped_done={summary.skipped_done} skipped_lineage={summary.skipped_lineage} failed={summary.failed}"
+        + f"skipped_done={summary.skipped_done} skipped_lineage={summary.skipped_lineage} failed={summary.failed}"
     )
     return summary
