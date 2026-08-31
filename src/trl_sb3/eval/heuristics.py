@@ -41,7 +41,7 @@ from trl_sb3.eval.evaluate import EVAL_AGG_KEYS
 SplitFn = Callable[[RoutingEnv, int], npt.NDArray[np.float64]]
 
 
-def ecmp_split(env: RoutingEnv, step_idx: int) -> npt.NDArray[np.float64]:
+def ecmp_split(env: RoutingEnv, _step_idx: int) -> npt.NDArray[np.float64]:
     """ECMP 等分（§5）：每 flow 的全部候选路径均分 1/n_paths（step_idx 不参与）。"""
     split = np.zeros((env._n, env._n_candidates))
     for i, paths in enumerate(env._paths()):
@@ -49,7 +49,7 @@ def ecmp_split(env: RoutingEnv, step_idx: int) -> npt.NDArray[np.float64]:
     return split
 
 
-def lb_split(env: RoutingEnv, step_idx: int) -> npt.NDArray[np.float64]:
+def lb_split(env: RoutingEnv, _step_idx: int) -> npt.NDArray[np.float64]:
     """LB 负载反比（§5）：路径负载度量 = 上一步各路径节点总入率
     sum(_in_rate[v].values()) 之和；权重 ∝ 1/(1+load_k)，行归一化。
     fresh env 首步 _in_rate 为空 → 等权 → 退化为 ECMP（step_idx 不参与）。"""

@@ -18,7 +18,7 @@ log_prob/ratio/clip 与 legacy 逐节点列切片同构 partition（同一标量
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, override
 
 import gymnasium as gym
 import numpy as np
@@ -43,12 +43,14 @@ class NodeFanVecEnv(VecEnv):
 
     def __init__(self, env: RoutingEnv) -> None:
         # 先绑底层再 super()：基类 __init__ 会调 get_attr("render_mode")（base_vec_env.py:75-79）
-        self._env = env
+        self._env: RoutingEnv = env
         super().__init__(env._n, env.observation_space, env.action_space)
 
+    @override
     def step_async(self, actions: npt.NDArray[np.int64]) -> None:
         self._actions = actions
 
+    @override
     def step_wait(self) -> VecEnvStepReturn:
         """底层一步：r_mean 广播、锁步 done、truncated 时自动 reset（dummy_vec_env.py:59-71 同构）。
 
@@ -62,7 +64,7 @@ class NodeFanVecEnv(VecEnv):
         if done:
             final_obs = obs
             obs, reset_info = self._env.reset()
-            self.reset_infos = [dict(reset_info) for _ in range(self.num_envs)]
+            self.reset_infos: list[dict[str, Any]] = [dict(reset_info) for _ in range(self.num_envs)]
         rewards = np.full(self.num_envs, reward, dtype=np.float64)
         dones = np.full(self.num_envs, done, dtype=bool)
         infos: list[dict[str, Any]] = []
@@ -74,6 +76,7 @@ class NodeFanVecEnv(VecEnv):
             infos.append(slot_info)
         return obs, rewards, dones, infos
 
+    @override
     def reset(self, *, seed: int | None = None) -> VecEnvObs:
         """原子 reset：底层 reset 一次，(N,287) 行即 N slot 观测（错做 N 次则 rng 流推进 N 次，
         与裸 env 单次 reset 的逐位相等性即破——测试以此证原子性）。seed 参数优先，否则消费
@@ -85,19 +88,23 @@ class NodeFanVecEnv(VecEnv):
         self._reset_options()
         return obs
 
+    @override
     def close(self) -> None:
         self._env.close()
 
+    @override
     def get_attr(self, attr_name: str, indices: VecEnvIndices = None) -> list[Any]:
         """底层属性 → N 份相同值；n/mu/pbrs 走 D2 公共别名。"""
         slots = list(self._get_indices(indices))
         value = self._env.get_wrapper_attr(_ATTR_ALIASES.get(attr_name, attr_name))
         return [value for _ in slots]
 
+    @override
     def set_attr(self, attr_name: str, value: Any, indices: VecEnvIndices = None) -> None:
         # 单底层 env：indices 无独立落点，无论指向哪些 slot 都只赋一次
         setattr(self._env, attr_name, value)
 
+    @override
     def env_method(
         self, method_name: str, *method_args: Any, indices: VecEnvIndices = None, **method_kwargs: Any
     ) -> list[Any]:
@@ -105,6 +112,7 @@ class NodeFanVecEnv(VecEnv):
         result = self._env.get_wrapper_attr(method_name)(*method_args, **method_kwargs)
         return [result for _ in slots]
 
+    @override
     def env_is_wrapped(
         self, wrapper_class: type[gym.Wrapper[Any, Any, Any, Any]], indices: VecEnvIndices = None
     ) -> list[bool]:

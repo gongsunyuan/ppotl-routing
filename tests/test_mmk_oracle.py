@@ -4,11 +4,10 @@ from __future__ import annotations
 
 import math
 from decimal import Decimal, localcontext
-from typing import cast
 
 import pytest
 
-from trl_sb3.env.mmk import MMKMetrics, mmk1k_metrics
+from trl_sb3.env.mmk import mmk1k_metrics
 
 CAPACITY = 10000
 MUS = (1000, 2000, 3000)
@@ -49,7 +48,7 @@ def test_mmk_matches_decimal_oracle(rho_target: float, mu: int) -> None:
     assert math.isfinite(result.L)
     assert math.isfinite(result.delay)
     expected = _oracle(lam, mu, CAPACITY)
-    for got, want in zip(cast(MMKMetrics, result), expected):
+    for got, want in zip(result, expected):
         assert math.isclose(got, want, rel_tol=1e-9, abs_tol=1e-12), (
             f"rho={rho_target} mu={mu}: got={got} want={want}"
         )

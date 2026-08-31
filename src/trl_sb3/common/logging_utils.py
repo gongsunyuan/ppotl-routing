@@ -23,7 +23,7 @@ import re
 import types
 from collections.abc import Mapping, Sequence
 from pathlib import Path
-from typing import Any, Self
+from typing import Any, Self, TextIO
 
 _SLUG_SANITIZE_RE = re.compile(r"[^A-Za-z0-9_.-]+")
 
@@ -78,11 +78,11 @@ class MetricsCSVWriter:
     def __init__(self, path: str | Path, columns: Sequence[str]) -> None:
         if not columns:
             raise ValueError("columns must be non-empty")
-        self._columns = list(columns)
-        self._path = Path(path)
+        self._columns: list[str] = list(columns)
+        self._path: Path = Path(path)
         self._path.parent.mkdir(parents=True, exist_ok=True)
-        self._file = self._path.open("a", encoding="utf-8", newline="")
-        self._writer = csv.DictWriter(
+        self._file: TextIO = self._path.open("a", encoding="utf-8", newline="")
+        self._writer: csv.DictWriter[str] = csv.DictWriter(
             self._file, fieldnames=self._columns, restval="", extrasaction="raise"
         )
         if self._path.stat().st_size == 0:

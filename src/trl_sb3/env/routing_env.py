@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import math
 from pathlib import Path
-from typing import Any, NamedTuple
+from typing import TYPE_CHECKING, Any, NamedTuple, override
 
 import gymnasium as gym
 import networkx as nx
@@ -24,6 +24,9 @@ import numpy.typing as npt
 
 from trl_sb3.env.mmk import mmk_delay, mmk_loss
 from trl_sb3.env.topology import k_shortest_paths, load_topology
+
+if TYPE_CHECKING:
+    from trl_sb3.env.topology import _DiGraph
 
 # N§1 定案：zip_dist 的 Poisson 权重 [1, 1/2, 1/6] 归一化 → [0.6, 0.3, 0.1]。
 ZIP_PROB: tuple[float, float, float] = (0.6, 0.3, 0.1)
@@ -72,51 +75,55 @@ class RoutingEnv(gym.Env[npt.NDArray[np.float64], np.int64]):
         change_flow_by_ep: tuple[tuple[int, float], ...] = ((8000, 1.0),),
     ) -> None:
         super().__init__()
-        self._pbrs = pbrs
-        self._alpha_plr = alpha_plr
-        self._beta_delay = beta_delay
-        self._n_candidates = n_candidates
-        self._capacity = capacity
-        self._gamma = gamma
-        self._mix_local = mix_local
-        self._mix_global = mix_global
-        self._episode_steps = episode_steps
-        self._th_max_rate = th_max_rate
-        self._rate_noise_scale = rate_noise_scale
-        self._rate_noise_clip = rate_noise_clip
-        self._propagation_rounds = propagation_rounds
-        self._change_flow_pct = change_flow_pct
-        self._change_flow_by_ep = change_flow_by_ep
-        self._avgrate = float(avgrate)
-        self._max_nodes = max_nodes
-        self._rng = np.random.default_rng(seed)  # 单流 rng，不碰全局
-        self._graph = load_topology(gml_path)
-        self._n = self._graph.number_of_nodes()
-        self._max_hop = nx.diameter(self._graph)
-        self._mu = self._rng.choice(mu_choices, size=self._n)  # ① init 一次性，此后图静态
+        self._pbrs: bool = pbrs
+        self._alpha_plr: float = alpha_plr
+        self._beta_delay: float = beta_delay
+        self._n_candidates: int = n_candidates
+        self._capacity: int = capacity
+        self._gamma: float = gamma
+        self._mix_local: float = mix_local
+        self._mix_global: float = mix_global
+        self._episode_steps: int = episode_steps
+        self._th_max_rate: float = th_max_rate
+        self._rate_noise_scale: float = rate_noise_scale
+        self._rate_noise_clip: float = rate_noise_clip
+        self._propagation_rounds: int = propagation_rounds
+        self._change_flow_pct: float = change_flow_pct
+        self._change_flow_by_ep: tuple[tuple[int, float], ...] = change_flow_by_ep
+        self._avgrate: float = float(avgrate)
+        self._max_nodes: int = max_nodes
+        self._rng: np.random.Generator = np.random.default_rng(seed)  # 单流 rng，不碰全局
+        self._graph: _DiGraph = load_topology(gml_path)
+        self._n: int = self._graph.number_of_nodes()
+        self._max_hop: int = nx.diameter(self._graph)
+        self._mu: npt.NDArray[np.int64] = self._rng.choice(mu_choices, size=self._n)  # ① init 一次性，此后图静态
         lcm = math.lcm(*mu_choices)
         for u, v in self._graph.edges:
             self._graph[u][v]["weight"] = lcm // int(self._mu[v])  # 覆盖矩阵残留值
-        self._neighbors = [sorted(self._graph.neighbors(i)) for i in range(self._n)]
+        self._neighbors: list[list[int]] = [sorted(self._graph.neighbors(i)) for i in range(self._n)]
         base_rate = int(avgrate)
-        self._candidate_rates = np.array(
+        self._candidate_rates: npt.NDArray[np.int64] = np.array(
             [base_rate, base_rate + zip_interval, base_rate - zip_interval]
         )
-        self._dst = np.empty(self._n, dtype=np.int64)
-        self._rate_init = np.empty(self._n, dtype=np.int64)
+        self._dst: npt.NDArray[np.int64] = np.empty(self._n, dtype=np.int64)
+        self._rate_init: npt.NDArray[np.int64] = np.empty(self._n, dtype=np.int64)
         for i in range(self._n):  # ② 每 flow：dst（重抽至 ≠i）→ rate_init
             dst = int(self._rng.integers(0, self._n))
             while dst == i:
                 dst = int(self._rng.integers(0, self._n))
             self._dst[i] = dst
             self._rate_init[i] = int(self._rng.choice(self._candidate_rates, p=list(ZIP_PROB)))
-        self.observation_space = gym.spaces.Box(-np.inf, np.inf, (7 * max_nodes,), dtype=np.float64)
-        self.action_space = gym.spaces.Discrete(n_candidates)
-        self._t = 0
-        self._episode = 0
-        self._rates = np.zeros(self._n)
-        self._last_rd = np.zeros(self._n)
-        self._last_rp = np.zeros(self._n)
+        # 基类 gym.Env 已声明 Space[ObsType]/Space[ActType]——按基类口径注解（覆写
+        # 兼容），具体 Box/Discrete 由消费方 isinstance 收窄（policy.py:173 同法）。
+        self.observation_space: gym.spaces.Space[npt.NDArray[np.float64]] = gym.spaces.Box(
+            -np.inf, np.inf, (7 * max_nodes,), dtype=np.float64
+        )
+        self.action_space: gym.spaces.Space[np.int64] = gym.spaces.Discrete(n_candidates)
+        self._t: int = 0
+        self._episode: int = 0
+        self._rates: npt.NDArray[np.float64] = np.zeros(self._n)
+        self._last_rd: npt.NDArray[np.float64] = np.zeros(self._n)
+        self._last_rp: npt.NDArray[np.float64] = np.zeros(self._n)
         self._k_path_cache: dict[tuple[int, int], list[list[int]]] = {}
         self._flow_paths: list[list[list[int]]] | None = None
         self._in_rate: list[dict[int, float]] = []
@@ -137,6 +144,7 @@ class RoutingEnv(gym.Env[npt.NDArray[np.float64], np.int64]):
         assert flow_paths is not None, "step 链只能在 reset() 之后调用（k_paths 惰性初始化）"
         return flow_paths
 
+    @override
     def reset(
         self, *, seed: int | None = None, options: dict[str, Any] | None = None
     ) -> tuple[npt.NDArray[np.float64], dict[str, Any]]:
@@ -187,6 +195,7 @@ class RoutingEnv(gym.Env[npt.NDArray[np.float64], np.int64]):
                 state[v, 7 * slot : 7 * slot + 7] = feats[node]
         return state
 
+    @override
     def step(
         self, action: np.int64 | npt.NDArray[np.int64]
     ) -> tuple[npt.NDArray[np.float64], float, bool, bool, dict[str, Any]]:

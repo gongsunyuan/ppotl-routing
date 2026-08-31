@@ -123,8 +123,8 @@ def _synthetic_runs(runs: Path) -> None:
         write(f"A0-s{seed}", "A0", seed, [], 0.20 + 0.01 * seed)
 
 
-@pytest.fixture(name="runs_source")
-def _runs_source(tmp_path: Path) -> Path:
+@pytest.fixture
+def runs_source(tmp_path: Path) -> Path:
     """真冒烟数据优先；缺席 → 合成 runs 目录（同产物契约）。"""
     if SMOKE_RUNS.is_dir():
         return SMOKE_RUNS

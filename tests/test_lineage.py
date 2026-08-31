@@ -17,6 +17,7 @@ import yaml
 import trl_sb3.run.sweep as sweep_module
 from trl_sb3.common.config import load_config, merge
 from trl_sb3.run.sweep import plan_runs, run_sweep, task_run_id
+from trl_sb3.train.runner import run_arm
 
 SCENARIO = {"topo": "Abilene.gml", "avgrate": 500}
 
@@ -112,7 +113,9 @@ def test_done_skip_is_idempotent_rerun(tmp_path: Path) -> None:
 def test_single_run_crash_does_not_kill_sweep(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Given A2 的 run_arm 被注入异常；When run_sweep（预训练 0 + A1 + A2）；
     Then sweep 不抛、failed=1、其余 2 done、A2 无 DONE。"""
-    real_run_arm = sweep_module.run_arm
+    # 从定义模块取原函数（sweep.run_arm 是 re-import，非导出名）；
+    # monkeypatch 仍打在 sweep 命名空间——_execute 消费的是后者。
+    real_run_arm = run_arm
 
     def _boom_arm(arm: str, **kwargs: Any) -> Path:
         if arm == "A2":

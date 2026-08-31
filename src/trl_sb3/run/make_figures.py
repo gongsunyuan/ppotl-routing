@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Any
 
 from matplotlib import pyplot as plt
+from matplotlib.figure import Figure
 
 from trl_sb3.common.config import load_config, resolve_path
 from trl_sb3.run.aggregate import (
@@ -63,10 +64,13 @@ def compute_stats(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return [dict(pair, holm_p=p) for pair, p in zip(pairs, holm_family(pairs), strict=True)]
 
 
-def _save(fig, out_dir: Path, stem: str) -> list[Path]:
+def _save(fig: Figure, out_dir: Path, stem: str) -> list[Path]:
     """Figure → PNG(150dpi) + 同名 PDF；写完关闭图。"""
     written: list[Path] = []
-    for suffix, kwargs in ((".png", {"dpi": 150}), (".pdf", {})):
+    # 显式 dict[str, Any]：字面量会被推成 dict[str, int]，** 解包后 pyright 拿它对
+    # savefig 任意 kw 参数（如 transparent: bool）做匹配而误报。
+    specs: tuple[tuple[str, dict[str, Any]], ...] = ((".png", {"dpi": 150}), (".pdf", {}))
+    for suffix, kwargs in specs:
         path = out_dir / f"{stem}{suffix}"
         fig.savefig(path, bbox_inches="tight", **kwargs)
         written.append(path)
@@ -140,7 +144,7 @@ def make_figures(
     (out_path / "figure_manifest.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
     print(
         f"[make_figures] runs={manifest['runs']} n_runs={manifest['n_runs']} "
-        f"denominators={manifest['denominators']} -> {manifest['out']}"
+        + f"denominators={manifest['denominators']} -> {manifest['out']}"
     )
     return manifest
 

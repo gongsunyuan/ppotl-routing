@@ -28,3 +28,21 @@ packages = ["src/trl_sb3"]
 # tests/ 以顶层模块互引（test_freeze ← test_sb3_smoke），与 pytest prepend 导入模式
 # （tests/ 目录进 sys.path）一致；类型检查器同口径解析。
 extraPaths = ["tests"]
+
+# 下列规则置 none 的理由（2026-08-30 basedpyright 1.39.10 全量清理时的决策）：
+# 依赖面无类型（scipy 无 stubs 且 scipy-stubs 不在 requirements.lock 钉版内；
+# SB3/gymnasium/networkx/pyyaml 的值经 yaml.safe_load / argparse / VecEnv API
+# 以 Any 流入），逐点标注只能复述库的无知、不增安全性；白盒测试按设计读
+# RoutingEnv 私有态（_n/_paths/_in_rate 等，determinism/oracle 表征）；
+# argparse add_argument / env.reset / model.learn / matplotlib 为副作用型调用，
+# 返回值按惯例弃置。规则本身保留在 basedpyright 升级依赖补齐类型后可再开。
+reportMissingTypeStubs = "none"
+reportAny = "none"
+reportExplicitAny = "none"
+reportUnknownMemberType = "none"
+reportUnknownVariableType = "none"
+reportUnknownArgumentType = "none"
+reportUnknownParameterType = "none"
+reportUnknownLambdaType = "none"
+reportUnusedCallResult = "none"
+reportPrivateUsage = "none"
