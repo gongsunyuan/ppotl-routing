@@ -26,6 +26,7 @@ from trl_sb3.eval.heuristics import (
     ecmp_split,
     heuristic_eval,
     lb_split,
+    rand_split,
     rollout_split_episode,
     rr_split,
     run_heuristic_eval,
@@ -77,6 +78,30 @@ def test_rr_rotates_onehot_position_per_step() -> None:
         assert np.allclose(split.max(axis=1), 1.0)
         for i, paths in enumerate(env._paths()):
             assert int(split[i].argmax()) == step % len(paths)
+
+
+def test_rand_split_onehot_deterministic_and_step_varying() -> None:
+    """Given fresh env；When rand_split 同 (回合,步) 调两次、不同步各一次；Then
+    one-hot 契约（行和 1/单选合法列）、同 (回合,步) 逐位复现（固定种子）、
+    相邻步抽签不同（i.i.d.，11 流碰撞概率 3^-11 量级）。"""
+    env = _fresh_env()
+    for step in (0, 1, 7):
+        split = rand_split(env, step)
+        _assert_split_contract(split, env)
+        assert np.allclose(split.max(axis=1), 1.0)  # one-hot 单选
+        for i, paths in enumerate(env._paths()):
+            assert int(split[i].argmax()) < len(paths)  # 合法候选列
+        assert np.array_equal(split, rand_split(env, step))  # 抽签确定
+    assert not np.array_equal(rand_split(env, 0), rand_split(env, 1))  # 步间独立
+
+
+def test_rand_rollout_reproducible_and_finite() -> None:
+    """Given 同构造同 reset 种子的两个独立 env；When RAND rollout_split_episode；
+    Then 产物逐位一致（抽签种子含回合/步序，与 env 动态流解耦）且聚合键全有限。"""
+    first = rollout_split_episode(_fresh_env(), rand_split, 50)
+    second = rollout_split_episode(_fresh_env(), rand_split, 50)
+    assert first == second
+    assert all(np.isfinite(v) for v in (first["r_mean_sum"], first["rd_mean"], first["rp_mean"], first["th_mean"]))
 
 
 @pytest.mark.parametrize("arm", ["ECMP", "LB", "RR"])

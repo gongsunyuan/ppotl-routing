@@ -75,10 +75,28 @@ def rr_split(env: RoutingEnv, step_idx: int) -> npt.NDArray[np.float64]:
     return split
 
 
+RAND_SPLIT_SEED = 20260901  # 随机择路抽签种子（固定 → 行级逐位可复现，基线 run_id 无种子因素约定不破）
+
+
+def rand_split(env: RoutingEnv, step_idx: int) -> npt.NDArray[np.float64]:
+    """RAND 随机择路（2026-09-01 用户指令，基线阶梯零参照）：每流每步 i.i.d. 均匀
+    抽一条候选路径（one-hot）。期望分流 = ECMP 等分，但逐步去同步——对照 RR 的
+    全局同步轮换：RAND−RR 分离"同步伤害"，RAND−ECMP 度量"随机化相对确定性等分
+    的代价/价值"。抽签 RNG 专用独立（default_rng((RAND_SPLIT_SEED, 回合, 步序))），
+    不碰 env._rng（评估回合流量动态零扰动）；种子含回合/步序 → 任意调用序下逐位
+    确定、跨行独立。"""
+    split = np.zeros((env._n, env._n_candidates))
+    rng = np.random.default_rng((RAND_SPLIT_SEED, env._episode, step_idx))
+    for i, paths in enumerate(env._paths()):
+        split[i, int(rng.integers(len(paths)))] = 1.0
+    return split
+
+
 HEURISTIC_SPLIT_FNS: dict[str, SplitFn] = {
     "ECMP": ecmp_split,
     "LB": lb_split,
     "RR": rr_split,
+    "RAND": rand_split,
 }
 
 
