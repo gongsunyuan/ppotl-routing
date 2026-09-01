@@ -1,0 +1,14 @@
+# Gridnet@600-900 探针(2026-09-01,用户指令;exploratory)
+pretrain:
+  seeds: []
+  episodes: 8000
+arms: []
+scenarios:
+  - {topo: Gridnet.gml, avgrate: 600}
+  - {topo: Gridnet.gml, avgrate: 700}
+  - {topo: Gridnet.gml, avgrate: 800}
+  - {topo: Gridnet.gml, avgrate: 900}
+seeds: []
+zeroshot: false
+ospf: true
+heuristic: [ECMP, LB, RR, RAND]
