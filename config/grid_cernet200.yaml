@@ -1,0 +1,11 @@
+# CERNET@200 探针(2026-09-01,用户指令;超出负载扫信封下界 250,exploratory)
+pretrain:
+  seeds: []
+  episodes: 8000
+arms: []
+scenarios:
+  - {topo: CERNET.gml, avgrate: 200}
+seeds: []
+zeroshot: false
+ospf: true
+heuristic: [ECMP, LB, RR, RAND]
