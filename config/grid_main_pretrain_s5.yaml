@@ -1,0 +1,12 @@
+# config/grid_main_pretrain_s5.yaml — A6 先行波单线程×多进程执行载体(RUNBOOK §6.1 b+c)
+# 与 grid_main.yaml 同因子同预算(8000ep, CERNET@500, seed 5),run_id 逐位一致;
+# 试点种子 0-2 已 DONE 会瞬时跳过。arms/scenarios 置空 = 只计划预训练行。
+pretrain:
+  seeds: [5]
+  episodes: 8000
+arms: []
+scenarios: []
+seeds: []
+zeroshot: false
+ospf: false
+heuristic: []

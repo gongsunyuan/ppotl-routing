@@ -1,0 +1,21 @@
+# config/grid_main_a6wave.yaml — D5 A6 先行波派生网格(2026-09-01 预构建,GATE-2 裁决后执行)
+# 派生自 grid_main.yaml:仅保留完整臂 A6(冻结躯干全方法),补齐 4 场景全部基线行
+# (计划 §5 D5:OSPF/ECMP/LB/RR 零参数分钟级;grid_main 本体无 heuristic 键,此处显式加)。
+# 因素/预算与 grid_main 逐位一致 → run_id 不变:试点已 DONE 的行(3 预训练 + 3 A6@Abilene
+# + 3 A0@Abilene + 4 基线@Abilene)自动 SKIP-DONE,与余量波无缝衔接。
+# 任务量:10 预训练 + A6×4×10 + A0×4×10 + 4 OSPF + 12 启发式 = 106。
+pretrain:
+  seeds: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+  episodes: 8000
+arms: [A6]
+scenarios:
+  - {topo: CERNET_failure.gml, avgrate: 500}
+  - {topo: Abilene.gml, avgrate: 500}
+  - {topo: NFSCNET.gml, avgrate: 500}
+  - {topo: CERNET.gml, avgrate: 1500}
+seeds: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+adapt_episodes: 1000
+a1b_episodes: 9000
+zeroshot: true
+ospf: true
+heuristic: [ECMP, LB, RR]
