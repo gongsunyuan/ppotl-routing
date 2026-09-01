@@ -1,0 +1,16 @@
+# config/grid_baseline_cernet_loads.yaml — CERNET 负载扫基线切片(2026-09-01,用户指令)
+# 用途:"区分度 vs 负载"经验曲线的缺口点 {250,1000,2000}(500=grid_baseline_cernet500
+# 已跑、1500=A6 先行波目标场景已跑,run_id 同负载扫信封 prereg v2 rates 切片,零重算)。
+# 协议:与全部基线行同口径(10 评估回合/固定种子流/贪心/基任务奖励)。
+pretrain:
+  seeds: []
+  episodes: 8000
+arms: []
+scenarios:
+  - {topo: CERNET.gml, avgrate: 250}
+  - {topo: CERNET.gml, avgrate: 1000}
+  - {topo: CERNET.gml, avgrate: 2000}
+seeds: []
+zeroshot: false
+ospf: true
+heuristic: [ECMP, LB, RR]
