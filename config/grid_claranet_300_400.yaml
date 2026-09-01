@@ -1,0 +1,12 @@
+# Claranet@300/400 探针(2026-09-01,用户指令;exploratory)
+pretrain:
+  seeds: []
+  episodes: 8000
+arms: []
+scenarios:
+  - {topo: Claranet.gml, avgrate: 300}
+  - {topo: Claranet.gml, avgrate: 400}
+seeds: []
+zeroshot: false
+ospf: true
+heuristic: [ECMP, LB, RR, RAND]
