@@ -1,67 +1,90 @@
-# config/grid_baseline_fullmatrix.yaml — 全拓扑×全负载基线矩阵(2026-09-01,用户指令:加 RAND 后全量对比)
-# 12 拓扑(6 网络 × normal/_failure) × 5 负载 {250..2000} × 5 基线(OSPF/ECMP/LB/RR/RAND)
-# = 300 评估行(零参数/评估专用,分钟级);已有行(源域对比+负载扫+主表目标场景 ~32 行)SKIP-DONE 复用。
-# RAND 抽签种子固定(RAND_SPLIT_SEED)→ 行级逐位可复现;协议地位=exploratory 诊断,入论文时注册信封。
+# config/grid_baseline_fullmatrix.yaml — 全拓扑×全负载基线矩阵(2026-09-01;@100/@150 为二扩,用户指令)
+# 12 拓扑(6 网络 × normal/_failure) × 7 负载 {100..2000} × 5 基线(OSPF/ECMP/LB/RR/RAND)
+# = 420 评估行(零参数;@100/@150 超出负载扫信封下界,exploratory);已有行 SKIP-DONE 复用。
 pretrain:
   seeds: []
   episodes: 8000
 arms: []
 scenarios:
+  - {topo: Abilene.gml, avgrate: 100}
+  - {topo: Abilene.gml, avgrate: 150}
   - {topo: Abilene.gml, avgrate: 250}
   - {topo: Abilene.gml, avgrate: 500}
   - {topo: Abilene.gml, avgrate: 1000}
   - {topo: Abilene.gml, avgrate: 1500}
   - {topo: Abilene.gml, avgrate: 2000}
+  - {topo: Abilene_failure.gml, avgrate: 100}
+  - {topo: Abilene_failure.gml, avgrate: 150}
   - {topo: Abilene_failure.gml, avgrate: 250}
   - {topo: Abilene_failure.gml, avgrate: 500}
   - {topo: Abilene_failure.gml, avgrate: 1000}
   - {topo: Abilene_failure.gml, avgrate: 1500}
   - {topo: Abilene_failure.gml, avgrate: 2000}
+  - {topo: CERNET.gml, avgrate: 100}
+  - {topo: CERNET.gml, avgrate: 150}
   - {topo: CERNET.gml, avgrate: 250}
   - {topo: CERNET.gml, avgrate: 500}
   - {topo: CERNET.gml, avgrate: 1000}
   - {topo: CERNET.gml, avgrate: 1500}
   - {topo: CERNET.gml, avgrate: 2000}
+  - {topo: CERNET_failure.gml, avgrate: 100}
+  - {topo: CERNET_failure.gml, avgrate: 150}
   - {topo: CERNET_failure.gml, avgrate: 250}
   - {topo: CERNET_failure.gml, avgrate: 500}
   - {topo: CERNET_failure.gml, avgrate: 1000}
   - {topo: CERNET_failure.gml, avgrate: 1500}
   - {topo: CERNET_failure.gml, avgrate: 2000}
+  - {topo: Claranet.gml, avgrate: 100}
+  - {topo: Claranet.gml, avgrate: 150}
   - {topo: Claranet.gml, avgrate: 250}
   - {topo: Claranet.gml, avgrate: 500}
   - {topo: Claranet.gml, avgrate: 1000}
   - {topo: Claranet.gml, avgrate: 1500}
   - {topo: Claranet.gml, avgrate: 2000}
+  - {topo: Claranet_failure.gml, avgrate: 100}
+  - {topo: Claranet_failure.gml, avgrate: 150}
   - {topo: Claranet_failure.gml, avgrate: 250}
   - {topo: Claranet_failure.gml, avgrate: 500}
   - {topo: Claranet_failure.gml, avgrate: 1000}
   - {topo: Claranet_failure.gml, avgrate: 1500}
   - {topo: Claranet_failure.gml, avgrate: 2000}
+  - {topo: Gridnet.gml, avgrate: 100}
+  - {topo: Gridnet.gml, avgrate: 150}
   - {topo: Gridnet.gml, avgrate: 250}
   - {topo: Gridnet.gml, avgrate: 500}
   - {topo: Gridnet.gml, avgrate: 1000}
   - {topo: Gridnet.gml, avgrate: 1500}
   - {topo: Gridnet.gml, avgrate: 2000}
+  - {topo: Gridnet_failure.gml, avgrate: 100}
+  - {topo: Gridnet_failure.gml, avgrate: 150}
   - {topo: Gridnet_failure.gml, avgrate: 250}
   - {topo: Gridnet_failure.gml, avgrate: 500}
   - {topo: Gridnet_failure.gml, avgrate: 1000}
   - {topo: Gridnet_failure.gml, avgrate: 1500}
   - {topo: Gridnet_failure.gml, avgrate: 2000}
+  - {topo: NFSCNET.gml, avgrate: 100}
+  - {topo: NFSCNET.gml, avgrate: 150}
   - {topo: NFSCNET.gml, avgrate: 250}
   - {topo: NFSCNET.gml, avgrate: 500}
   - {topo: NFSCNET.gml, avgrate: 1000}
   - {topo: NFSCNET.gml, avgrate: 1500}
   - {topo: NFSCNET.gml, avgrate: 2000}
+  - {topo: NFSCNET_failure.gml, avgrate: 100}
+  - {topo: NFSCNET_failure.gml, avgrate: 150}
   - {topo: NFSCNET_failure.gml, avgrate: 250}
   - {topo: NFSCNET_failure.gml, avgrate: 500}
   - {topo: NFSCNET_failure.gml, avgrate: 1000}
   - {topo: NFSCNET_failure.gml, avgrate: 1500}
   - {topo: NFSCNET_failure.gml, avgrate: 2000}
+  - {topo: NSF.gml, avgrate: 100}
+  - {topo: NSF.gml, avgrate: 150}
   - {topo: NSF.gml, avgrate: 250}
   - {topo: NSF.gml, avgrate: 500}
   - {topo: NSF.gml, avgrate: 1000}
   - {topo: NSF.gml, avgrate: 1500}
   - {topo: NSF.gml, avgrate: 2000}
+  - {topo: NSF_failure.gml, avgrate: 100}
+  - {topo: NSF_failure.gml, avgrate: 150}
   - {topo: NSF_failure.gml, avgrate: 250}
   - {topo: NSF_failure.gml, avgrate: 500}
   - {topo: NSF_failure.gml, avgrate: 1000}
