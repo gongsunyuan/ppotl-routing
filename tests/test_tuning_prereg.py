@@ -200,18 +200,24 @@ def test_prereg_overlay_mapping_and_concurrency_placeholder() -> None:
 
 
 def test_metrics_prereg_narrative_extras_registered_and_version_bumped() -> None:
-    """Given metrics_prereg.yaml;When safe_load;Then meta.version 升到 2(v2=叙事
-    增项注册留痕、v1=初始)且 narrative_extras 三项注册齐全:负载扫 rates/主拓扑
-    解释与 GATE-2 确认旗标、ospf_agreement 开关引用与 determinism 测试、Δ-vs-OSPF
-    与泛化差距面板定义,统一 EXPLORATORY 标签(计划 §5 主表余量)。"""
+    """Given metrics_prereg.yaml;When safe_load;Then meta.version 升到 3(v3=GATE-2
+    裁决落档——theta=null 即终局、v2=叙事增项注册留痕、v1=初始)且 narrative_extras
+    三项注册齐全:负载扫 rates/主拓扑解释与 GATE-2 确认旗标、ospf_agreement 开关
+    引用与 determinism 测试、Δ-vs-OSPF 与泛化差距面板定义,统一 EXPLORATORY 标签
+    (计划 §5 主表余量);theta 锁死 null(逐场景 theta_rule 推导即终局口径)。"""
     doc = _load_metrics()
     meta = doc["meta"]
-    assert meta["version"] == 2
-    assert [entry["version"] for entry in meta["change_log"]] == [2, 1]
+    assert meta["version"] == 3
+    assert [entry["version"] for entry in meta["change_log"]] == [3, 2, 1]
     assert meta["status"] == "pre_registered_before_main_table_generation"
+    # v3 留痕须落 GATE-2 裁决:theta=null 终局 + 种子数缺省
+    assert "GATE-2" in meta["change_log"][0]["change"]
+    assert "终局" in meta["change_log"][0]["change"]
+    assert "n=10" in meta["change_log"][0]["change"]
+    assert doc["theta"] is None  # v3 裁决:null 即终局,此后禁回填全局 float
     # v2 留痕须点名三项增项;主拓扑解释须留 GATE-2 确认旗标
-    assert "叙事增项" in meta["change_log"][0]["change"]
-    assert "EXPLORATORY" in meta["change_log"][0]["change"]
+    assert "叙事增项" in meta["change_log"][1]["change"]
+    assert "EXPLORATORY" in meta["change_log"][1]["change"]
 
     extras = doc["narrative_extras"]
     assert extras["label"] == "exploratory"

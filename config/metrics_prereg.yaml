@@ -1,21 +1,24 @@
 # config/metrics_prereg.yaml — 指标预注册骨架（M3，计划 §5 指标三元组/统计）。
 # 防事后择优：θ/W/k/α 跑主表前钉死于此；指标（eval/metrics.py）与聚合器
-# （run/aggregate.py）按本文件取值，代码不硬编码。theta=null = 尚未预注册，
-# 聚合暂按 theta_rule 推导口径；试点后回填定值（此后不得再改）。
+# （run/aggregate.py）按本文件取值，代码不硬编码。theta=null = 终局口径
+# （GATE-2 2026-09-01 裁决：逐场景按 theta_rule 推导即预注册口径，v3 留痕）。
 # 任何偏离须显式修订本文件（升 meta.version 并留痕，约定对齐 tuning_prereg.yaml）。
 
 # —— meta：预注册身份与版本留痕（2026-08-31 随叙事增项注册引入）——
 meta:
   status: pre_registered_before_main_table_generation  # 叙事增项先于主表余量数据生成注册（计划 §5）
   date: "2026-08-31"                                   # 引号防 YAML date 类型化
-  version: 2
+  version: 3
   change_log:
+    - {version: 3, date: "2026-09-01", change: "GATE-2 裁决落档（§7.4 缺省，试点+先行波全程按此口径聚合）：theta 保持 null = 逐场景按 theta_rule 推导为终局口径（试点单场景数值无法代表主表 4 场景，禁回填全局 float——会把 CERNET 系场景 τ 全删失）；负载扫主拓扑解释 CERNET.gml 随 v2 注册生效；终版种子数 n=10 维持计划缺省（功效敏感性：稳定臂可检出 δ≈0.89σ、崩溃臂 δ≈0.19）"}
     - {version: 2, date: "2026-08-31", change: "叙事增项注册（计划 §5 主表余量，冻结前入预注册信封；全部 EXPLORATORY——不进确认性指标族/显著性族，不回灌 θ/W/k，增项数据缺席不阻塞主表）：① 基线负载扫 rates [250,500,1000,1500,2000] × 主拓扑（解释 = 预训练源拓扑 CERNET.gml，GATE-2 待用户确认）；② OSPF-agreement 率日志（paper_defaults.eval.ospf_agreement_log，默认 false，on/off 位同 determinism 测试锁定）；③ Δ-vs-OSPF 逐场景面板 + 泛化差距面板（make_figures 小扩展）"}
     - {version: 1, date: "2026-08-30", change: 初始预注册（θ/W/k/α 骨架；final_eval_episodes 记 D1 裁决 2026-08-30）}
   plan: .omo/plans/experiment-execution-plan.md
 
 # —— threshold（τ 绝对阈值 θ，计划 §5-1）——
-# 试点后回填定值 float；null = 未预注册，聚合按 theta_rule 推导
+# GATE-2 裁决（2026-09-01，§7.4 缺省，v3 留痕）：null 即终局——逐场景按 theta_rule
+# 推导本身就是预注册口径（公式无人工自由度）；此后禁回填全局 float（试点单场景
+# 数值无法代表主表 4 场景，全局覆盖会把 CERNET 系场景 τ 全删失）。
 theta: null
 # θ 推导规则（计划 §5-1）：逐 (topo, rate) 场景取
 #   θ = max(OSPF 贪心分, 最优臂渐近 − 合并组内 σ)
