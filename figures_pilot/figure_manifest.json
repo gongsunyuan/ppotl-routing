@@ -1,0 +1,32 @@
+{
+  "created_at": "2026-09-01T02:24:39.296792+00:00",
+  "runs": "/mnt/data/gsy/ppotl-routing/runs",
+  "out": "/mnt/data/gsy/ppotl-routing/figures_pilot",
+  "normalization": "per-(topo,rate) max of r_mean_mean across all runs (MDPI tex:475)",
+  "denominators": {
+    "Abilene.gml@500": 0.7855909090909091,
+    "CERNET.gml@500": 0.3622629268292683
+  },
+  "prereg": {
+    "theta": null,
+    "window_episodes": 500,
+    "asymptote_k": 5,
+    "alpha": 0.05,
+    "primary_metric": "tau"
+  },
+  "figures": [
+    "adaptation_curves.png",
+    "adaptation_curves.pdf",
+    "asymptote_bars.png",
+    "asymptote_bars.pdf",
+    "delta_vs_ospf.png",
+    "delta_vs_ospf.pdf",
+    "generalization_gap.png",
+    "generalization_gap.pdf"
+  ],
+  "stats_files": [
+    "stats.json",
+    "stats.csv"
+  ],
+  "n_runs": 34
+}
