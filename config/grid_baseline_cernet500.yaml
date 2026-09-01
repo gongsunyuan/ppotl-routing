@@ -1,0 +1,15 @@
+# config/grid_baseline_cernet500.yaml — 源域基线行网格(2026-09-01,用户裁决支持证据)
+# 用途:源域(CERNET@500)上"论文全方法(=预训练策略)vs 启发式"对比的缺口行。
+# 协议与预训练终评同口径(10 评估回合/固定种子流/贪心/pbrs=False)。
+# run_id 与负载扫信封(prereg v2,rates 含 500 × CERNET.gml)的 500 切片逐位相同——
+# 余量波解冻后负载扫跑到 500 时 DONE 跳过复用,零重算。
+pretrain:
+  seeds: []            # 空 → 不产预训练任务
+  episodes: 8000       # 占位(无任务时不生效,仅通过 _merged_config 校验)
+arms: []               # 不跑训练臂
+scenarios:
+  - {topo: CERNET.gml, avgrate: 500}
+seeds: []              # 基线行恒 seed=0,此处无臂任务,留空
+zeroshot: false        # A0 依赖预训练源,跳过
+ospf: true             # OSPF 基线行(每场景 1 行)
+heuristic: [ECMP, LB, RR]  # 启发式基线行(每场景每策略 1 行)
