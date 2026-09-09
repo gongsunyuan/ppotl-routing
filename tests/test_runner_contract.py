@@ -92,7 +92,15 @@ def test_a3_loads_pretrained_source_and_finishes(
 ) -> None:
     """Given 预训练源 ckpt（CERNET 41 节点，整批 2050）；When A3(Abilene) 微调；
     Then 加载+冻结成功跑完（整批重算为 550），manifest.source_run_id 非空、臂因子正确。"""
-    run_path = run_arm("A3", topo=TOPO, rate=RATE, seed=0, source_run_id=pre_run.name, episodes=2, config=cfg)
+    run_path = run_arm(
+        "A3",
+        topo=TOPO,
+        rate=RATE,
+        seed=0,
+        source_run_id=pre_run.name,
+        episodes=2,
+        config=cfg,
+    )
     assert is_done(run_path)
     manifest = _json(run_path, "manifest.json")
     assert manifest["source_run_id"] == pre_run.name
@@ -128,13 +136,16 @@ def test_failed_run_writes_traceback_without_done(
 ) -> None:
     """Given env.step 抛异常（A1+坏 env 注入，seed 区分 run_id）；When run_arm；
     Then 异常 re-raise、FAILED 含 traceback 与异常信息、无 DONE/ckpt。"""
+
     def _boom(_self: RoutingEnv, _actions: Any) -> tuple[Any, ...]:
         raise RuntimeError("boom-step")
 
     monkeypatch.setattr(RoutingEnv, "step", _boom)
     with pytest.raises(RuntimeError, match="boom-step"):
         run_arm("A1", topo=TOPO, rate=RATE, seed=99, episodes=1, config=cfg)
-    expected_id = make_run_id(arm="A1", topo=TOPO, rate=RATE, seed=99, pbrs=False, freeze=False, pretrain=None)
+    expected_id = make_run_id(
+        arm="A1", topo=TOPO, rate=RATE, seed=99, pbrs=False, freeze=False, pretrain=None
+    )
     failed_dir = Path(cfg["paths"]["runs_dir"], expected_id)
     assert failed_dir.is_dir()
     failed_text = (failed_dir / "FAILED").read_text(encoding="utf-8")
@@ -146,11 +157,15 @@ def test_interrupted_rerun_truncates_stale_metrics(cfg: dict[str, Any]) -> None:
     """Given 中断态 run 目录（预写 999 行垃圾 metrics.csv、无 DONE）；When run_arm
     同参数复跑；Then 旧垃圾行被截断（truncate-on-restart，issues.md M3）：新
     metrics.csv 全部行 arm=A1、行数=1×50，DONE 出现。"""
-    run_id = make_run_id(arm="A1", topo=TOPO, rate=RATE, seed=77, pbrs=False, freeze=False, pretrain=None)
+    run_id = make_run_id(
+        arm="A1", topo=TOPO, rate=RATE, seed=77, pbrs=False, freeze=False, pretrain=None
+    )
     run_path = Path(cfg["paths"]["runs_dir"], run_id)
     run_path.mkdir(parents=True, exist_ok=True)
     garbage = "\n".join(f"garbage,{i}" for i in range(999)) + "\n"
-    (run_path / "metrics.csv").write_text(garbage, encoding="utf-8")  # 中断残留，无 DONE
+    (run_path / "metrics.csv").write_text(
+        garbage, encoding="utf-8"
+    )  # 中断残留，无 DONE
     rerun = run_arm("A1", topo=TOPO, rate=RATE, seed=77, episodes=1, config=cfg)
     assert rerun == run_path
     rows = _rows(run_path)

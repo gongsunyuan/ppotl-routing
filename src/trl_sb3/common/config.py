@@ -27,7 +27,9 @@ def load_config(path: str | Path | None = None) -> dict[str, Any]:
     with config_path.open("r", encoding="utf-8") as handle:
         doc = yaml.safe_load(handle)
     if not isinstance(doc, dict):
-        raise TypeError(f"config root must be a mapping, got {type(doc).__name__}: {config_path}")
+        raise TypeError(
+            f"config root must be a mapping, got {type(doc).__name__}: {config_path}"
+        )
     if "paper_defaults" in doc:
         inner = doc["paper_defaults"]
         if not isinstance(inner, dict):

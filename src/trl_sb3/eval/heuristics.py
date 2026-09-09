@@ -54,7 +54,9 @@ def lb_split(env: RoutingEnv, _step_idx: int) -> npt.NDArray[np.float64]:
     sum(_in_rate[v].values()) 之和；权重 ∝ 1/(1+load_k)，行归一化。
     fresh env 首步 _in_rate 为空 → 等权 → 退化为 ECMP（step_idx 不参与）。"""
     split = np.zeros((env._n, env._n_candidates))
-    has_load = bool(env._in_rate)  # reset 不清 _in_rate：回合 2+ 首步沿用上回合尾负载（记 issues）
+    has_load = bool(
+        env._in_rate
+    )  # reset 不清 _in_rate：回合 2+ 首步沿用上回合尾负载（记 issues）
     for i, paths in enumerate(env._paths()):
         loads = np.zeros(len(paths))
         if has_load:
@@ -188,9 +190,19 @@ def run_heuristic_eval(
     is_done 幂等跳过。"""
     cfg = load_config() if config is None else config
     run_id = make_run_id(
-        arm=name, topo=topo, rate=int(rate), seed=0, pbrs=False, freeze=False, pretrain=None
+        arm=name,
+        topo=topo,
+        rate=int(rate),
+        seed=0,
+        pbrs=False,
+        freeze=False,
+        pretrain=None,
     )
-    root = Path(out_root) if out_root is not None else resolve_path(cfg["paths"]["runs_dir"])
+    root = (
+        Path(out_root)
+        if out_root is not None
+        else resolve_path(cfg["paths"]["runs_dir"])
+    )
     directory = run_dir(root, run_id)
     if is_done(directory):
         return directory

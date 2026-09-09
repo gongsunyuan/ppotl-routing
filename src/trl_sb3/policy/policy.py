@@ -1,4 +1,4 @@
-﻿"""SB3 2.7.0 ActorCriticPolicy 子类（M1-2，决策 D3）：pi/vf 完全独立两网接入，
+"""SB3 2.7.0 ActorCriticPolicy 子类（M1-2，决策 D3）：pi/vf 完全独立两网接入，
 绕过 MlpExtractor 默认 Tanh/orthogonal 路径。
 
 接线点（venv stable-baselines3 2.7.0 源码核对，common/policies.py 行号）：
@@ -6,7 +6,8 @@
   本类强制 share_features_extractor=False（:463 默认 True）与 ortho_init=False
   （:455 默认 True）——extract_features :660-682 走 pi/vf 双抽取，正交初始化整块不触发。
 - ``_build_mlp_extractor`` :570-583 原建 MlpExtractor；本类换 SeparatePiVfNets
-  （nets.py 两网：actor 287→128→64→3 logits、critic →1，kaiming fan_out）。
+  （nets.py 两网：GRU 版 actor = FeatureExtractor(78→99) + MLP 99→128→64→3 logits、
+  critic 同构 →1，kaiming fan_out）。
   隐层来源两级：policy_kwargs ``net_layers``（per-run 覆盖缝——runner 从 spec.config
   注入，SB3 把 policy_kwargs pickle 进 ckpt、PPO.load 后 ``_setup_model`` 以
   ``**policy_kwargs`` 重建，覆盖随 ckpt 往返）优先；缺省回落全局 config
@@ -24,8 +25,10 @@
 legacy 结构对照 main.py:81-111：actor/critic 同构独立 Sequential、PReLU、
 kaiming_normal_(fan_out, relu)；差异仅 SB3 侧 optimizer/保存格式。
 
-冻结锚点（M2-1/D4）：config freeze.frozen_layers 的 actor.0/.1/.2 对应
-state_dict 前缀 ``mlp_extractor.actor.*`` / ``mlp_extractor.critic.*``。
+冻结锚点（M2-1/D4，GRU 版层级）：config freeze.frozen_layers 的
+``actor.1.N`` 经 freeze._module_at 逐级下标解析到
+state_dict 前缀 ``mlp_extractor.actor.1.*`` / ``mlp_extractor.critic.*``；
+``actor.0``（FeatureExtractor）不进冻结清单，保持可训练。
 """
 
 from __future__ import annotations
@@ -40,7 +43,7 @@ from stable_baselines3.common.type_aliases import Schedule
 from torch import Tensor, nn
 
 from trl_sb3.common.config import load_config
-from trl_sb3.policy.nets import build_nets
+from trl_sb3.policy.nets import MLP_INPUT_DIM, build_nets
 
 
 class SeparatePiVfNets(nn.Module):
@@ -51,10 +54,14 @@ class SeparatePiVfNets(nn.Module):
         super().__init__()
         self.actor: nn.Sequential = actor
         self.critic: nn.Sequential = critic
-        # Sequential.__getitem__ 静态返回 Sequential | Module（torch 2.13 stub），
-        # out_features 只在头上——isinstance 收窄到 Linear 后取值。
-        actor_head = actor[-1]
-        critic_head = critic[-1]
+        # GRU 版：actor/critic 是两层 Sequential(FeatureExtractor, MLP)，头在最内层 MLP 末位
+        actor_last = actor[-1]
+        actor_mlp = actor_last if isinstance(actor_last, nn.Sequential) else actor
+        critic_last = critic[-1]
+        critic_mlp = critic_last if isinstance(critic_last, nn.Sequential) else critic
+
+        actor_head = actor_mlp[-1]
+        critic_head = critic_mlp[-1]
         assert isinstance(actor_head, nn.Linear) and isinstance(critic_head, nn.Linear)
         self.latent_dim_pi: int = actor_head.out_features
         self.latent_dim_vf: int = critic_head.out_features
@@ -70,16 +77,31 @@ class SeparatePiVfNets(nn.Module):
         return self.critic(features)
 
 
-def _hidden_from_config(features_dim: int, layers: Sequence[int] | None = None) -> tuple[int, ...]:
+def _hidden_from_config(
+    features_dim: int, layers: Sequence[int] | None = None
+) -> tuple[int, ...]:
     """隐层来源二选一：显式 layers（policy_kwargs net_layers，per-run 覆盖）或
-    config net.layers（论文超参唯一出处）；输入维与观测空间一致两条路径同校验。"""
-    net_layers = tuple(load_config()["net"]["layers"]) if layers is None else tuple(layers)
-    if net_layers[0] != features_dim:
-        raise ValueError(f"隐层输入维 {net_layers[0]} != 观测特征维 {features_dim}")
+    config net.layers（论文超参唯一出处）。
+
+    GRU 版校验：net.layers[0] 是 MLP 输入维（= FeatureExtractor 输出 99，
+    nets.MLP_INPUT_DIM），与 obs 维（features_dim，78）解耦——obs 由
+    FeatureExtractor 消化为 99 维再进 MLP；不符即 ValueError 点名实参
+    （注入路径与 config 回落路径同一口径）。
+    """
+    net_layers = (
+        tuple(load_config()["net"]["layers"]) if layers is None else tuple(layers)
+    )
+    if net_layers[0] != MLP_INPUT_DIM:
+        raise ValueError(
+            f"net.layers[0]={net_layers[0]} 与 GRU 特征提取器输出维 {MLP_INPUT_DIM} 不符"
+            + f"（GRU 版首元素是 MLP 输入维，非 obs 维 {features_dim}）"
+        )
     return net_layers[1:]
 
 
-def split_actor_critic(named_params: Iterable[tuple[str, Tensor]]) -> tuple[list[Tensor], list[Tensor]]:
+def split_actor_critic(
+    named_params: Iterable[tuple[str, Tensor]],
+) -> tuple[list[Tensor], list[Tensor]]:
     """双 lr 分区（缝 3）：按参数名前缀二分——actor=mlp_extractor.actor.*、
     critic=mlp_extractor.critic.*（当前策略参数恰好全落这两前缀：action_net/
     value_net=Identity、FlattenExtractor 均无参数）。前缀之外出现任何参数
@@ -96,7 +118,9 @@ def split_actor_critic(named_params: Iterable[tuple[str, Tensor]]) -> tuple[list
         else:
             strays.append(name)
     if strays:
-        raise ValueError(f"双 lr 分区不完备：actor/critic 前缀之外的参数 {strays}（须显式归组，勿静默漏优化）")
+        raise ValueError(
+            f"双 lr 分区不完备：actor/critic 前缀之外的参数 {strays}（须显式归组，勿静默漏优化）"
+        )
     return actor_params, critic_params
 
 
@@ -160,8 +184,12 @@ class ActorCriticPolicy(SB3ActorCriticPolicy):
         net_layers = kwargs.pop("net_layers", None)
         lr_critic_ratio = kwargs.pop("lr_critic_ratio", None)
         # 属性须先于 super().__init__ 置位：其末行 _build(lr_schedule) 即消费 net_layers。
-        self.net_layers: tuple[int, ...] | None = None if net_layers is None else tuple(net_layers)
-        self.lr_critic_ratio: float | None = None if lr_critic_ratio is None else float(lr_critic_ratio)
+        self.net_layers: tuple[int, ...] | None = (
+            None if net_layers is None else tuple(net_layers)
+        )
+        self.lr_critic_ratio: float | None = (
+            None if lr_critic_ratio is None else float(lr_critic_ratio)
+        )
         kwargs.setdefault("share_features_extractor", False)
         kwargs.setdefault("ortho_init", False)
         super().__init__(observation_space, action_space, lr_schedule, *args, **kwargs)
@@ -171,12 +199,18 @@ class ActorCriticPolicy(SB3ActorCriticPolicy):
         """覆写 policies.py:570-583：nets.py 两网（kaiming 全局 rng，PPO seed 可复现）。
         头维 = 类别数（get_action_dim 对 Discrete 返回动作向量维 1，此处不适用）；
         隐层读 self.net_layers（缺省回落全局 config，见 _hidden_from_config）。"""
-        assert isinstance(self.action_space, spaces.Discrete), "TRL 策略只支持 Discrete(K)"
+        assert isinstance(self.action_space, spaces.Discrete), (
+            "TRL 策略只支持 Discrete(K)"
+        )
         hidden = _hidden_from_config(self.features_dim, self.net_layers)
-        actor, critic = build_nets(self.features_dim, int(self.action_space.n), hidden=hidden)
+        actor, critic = build_nets(
+            self.features_dim, int(self.action_space.n), hidden=hidden
+        )
         # 结构化替身（非 MlpExtractor 子类，D4 决策）：SB3 按 forward_actor/critic +
         # latent_dim_pi/vf 鸭子类型消费——显式窄注解供 freeze 等消费方取 .actor/.critic。
-        self.mlp_extractor: SeparatePiVfNets = SeparatePiVfNets(actor, critic).to(self.device)
+        self.mlp_extractor: SeparatePiVfNets = SeparatePiVfNets(actor, critic).to(
+            self.device
+        )
 
     @override
     def _build(self, lr_schedule: Schedule) -> None:
@@ -197,5 +231,9 @@ class ActorCriticPolicy(SB3ActorCriticPolicy):
         else:
             actor_params, critic_params = split_actor_critic(self.named_parameters())
             self.optimizer = DualLrAdam(
-                actor_params, critic_params, lr_schedule(1), self.lr_critic_ratio, **self.optimizer_kwargs
+                actor_params,
+                critic_params,
+                lr_schedule(1),
+                self.lr_critic_ratio,
+                **self.optimizer_kwargs,
             )

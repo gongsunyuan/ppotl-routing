@@ -21,7 +21,10 @@ SCENARIO = {"topo": "Abilene.gml", "avgrate": 500}
 
 
 def _base_cfg(root: Path) -> dict[str, Any]:
-    return merge(load_config(), {"paths": {"runs_dir": str(root / "runs"), "ckpts_dir": str(root / "ckpts")}})
+    return merge(
+        load_config(),
+        {"paths": {"runs_dir": str(root / "runs"), "ckpts_dir": str(root / "ckpts")}},
+    )
 
 
 def _mini_grid(**extra: Any) -> dict[str, Any]:
@@ -38,15 +41,23 @@ def _mini_grid(**extra: Any) -> dict[str, Any]:
 
 
 def test_overlay_net_layers_replaces_list_keeps_siblings(tmp_path: Path) -> None:
-    """Given overlay net.layers=[287,256,128]；When _merged_config；Then net.layers
+    """Given overlay net.layers=[99,256,128]；When _merged_config；Then net.layers
     整体替换（列表不做逐元素合并）、net 兄弟键与其余顶层节全部保留。"""
     base = _base_cfg(tmp_path)
-    cfg = _merged_config(_mini_grid(config_overlay={"net": {"layers": [287, 256, 128]}}), base)
-    assert cfg["net"]["layers"] == [287, 256, 128]
-    assert base["net"]["layers"] == [287, 128, 64]  # 基线默认，证明替换真实生效
+    cfg = _merged_config(
+        _mini_grid(config_overlay={"net": {"layers": [99, 256, 128]}}), base
+    )
+    assert cfg["net"]["layers"] == [99, 256, 128]
+    assert base["net"]["layers"] == [
+        99,
+        128,
+        64,
+    ]  # 基线默认（GRU 版），证明替换真实生效
     for key in ("activation", "init", "separate_pi_vf"):
         assert cfg["net"][key] == base["net"][key]
-    expected_legacy = merge(base, {"pretrain": {"episodes": 1}, "adapt": {"episodes": 1}})
+    expected_legacy = merge(
+        base, {"pretrain": {"episodes": 1}, "adapt": {"episodes": 1}}
+    )
     for key in expected_legacy:
         if key != "net":
             assert cfg[key] == expected_legacy[key]
@@ -56,7 +67,8 @@ def test_overlay_ppo_subtree_merges_without_dropping_siblings(tmp_path: Path) ->
     """Given overlay ppo.learning_rate/ent_coef 两键；When _merged_config；Then
     两键生效、ppo 其余键（n_steps/gamma/batch_size/...）原样保留。"""
     cfg = _merged_config(
-        _mini_grid(config_overlay={"ppo": {"learning_rate": 1.0e-4, "ent_coef": 0.01}}), _base_cfg(tmp_path)
+        _mini_grid(config_overlay={"ppo": {"learning_rate": 1.0e-4, "ent_coef": 0.01}}),
+        _base_cfg(tmp_path),
     )
     assert cfg["ppo"]["learning_rate"] == 1.0e-4
     assert cfg["ppo"]["ent_coef"] == 0.01
@@ -76,21 +88,30 @@ def test_overlay_applies_after_budget_field_overrides(tmp_path: Path) -> None:
     assert cfg["pretrain"]["episodes"] == 3
 
 
-def test_grid_without_or_empty_overlay_matches_episodes_only_behavior(tmp_path: Path) -> None:
+def test_grid_without_or_empty_overlay_matches_episodes_only_behavior(
+    tmp_path: Path,
+) -> None:
     """Given 无 config_overlay 与空 config_overlay 两种网格；When _merged_config；
     Then 均与旧口径（仅 pretrain/adapt episodes 覆盖）逐位相等——默认路径零漂移。"""
-    expected = merge(_base_cfg(tmp_path), {"pretrain": {"episodes": 1}, "adapt": {"episodes": 1}})
+    expected = merge(
+        _base_cfg(tmp_path), {"pretrain": {"episodes": 1}, "adapt": {"episodes": 1}}
+    )
     assert _merged_config(_mini_grid(), _base_cfg(tmp_path)) == expected
-    assert _merged_config(_mini_grid(config_overlay={}), _base_cfg(tmp_path)) == expected
+    assert (
+        _merged_config(_mini_grid(config_overlay={}), _base_cfg(tmp_path)) == expected
+    )
 
 
 def test_plan_runs_propagates_overlay_into_every_task_config(tmp_path: Path) -> None:
     """Given overlay net.layers 网格；When plan_runs；Then 每个 RunTask.config 携带
     叠加值（下游 seam 2/tune.py 的取值入口），任务清单形状不受 overlay 影响。"""
     plain = plan_runs(_mini_grid(), _base_cfg(tmp_path))
-    tasks = plan_runs(_mini_grid(config_overlay={"net": {"layers": [287, 256, 128]}}), _base_cfg(tmp_path))
+    tasks = plan_runs(
+        _mini_grid(config_overlay={"net": {"layers": [99, 256, 128]}}),
+        _base_cfg(tmp_path),
+    )
     assert [t.arm for t in tasks] == [t.arm for t in plain] == ["pretrain", "A1"]
-    assert all(t.config["net"]["layers"] == [287, 256, 128] for t in tasks)
+    assert all(t.config["net"]["layers"] == [99, 256, 128] for t in tasks)
 
 
 def test_non_mapping_overlay_raises_value_error(tmp_path: Path) -> None:

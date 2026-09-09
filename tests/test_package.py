@@ -21,7 +21,10 @@ def test_six_subpackages_importable() -> None:
 
 
 def test_default_config_paper_defaults_contract() -> None:
-    """Given 默认配置；When 加载；Then paper_defaults 关键超参与计划 D2/D3/§3 一致。"""
+    """Given 默认配置；When 加载；Then paper_defaults 关键超参与定案一致——
+    方案 A 超参（DEVIATIONS #16：lr 1e-5 / ent 0.1 / epochs 15）、GRU 版
+    net.layers [99,128,64]（#15）、源域 Claranet@500×15000ep + D6 四场景
+    （#17，2026-09-09 裁决）。"""
     cfg = load_config()
     assert cfg["env"]["K"] == 3
     assert cfg["env"]["max_nodes"] == 41
@@ -32,26 +35,37 @@ def test_default_config_paper_defaults_contract() -> None:
     assert cfg["env"]["reward_mix"] == {"local": 0.6, "global": 0.4}
     assert cfg["env"]["episode_steps"] == 50
     assert cfg["ppo"]["n_steps"] == 50
-    assert cfg["ppo"]["n_epochs"] == 10
+    assert cfg["ppo"]["n_epochs"] == 15  # 方案 A（DEVIATIONS #16）
     assert cfg["ppo"]["batch_size"] is None  # = 50·N 由 runner 按拓扑计算
     assert cfg["ppo"]["gamma"] == 0.99
     assert cfg["ppo"]["gae_lambda"] == 1.0
     assert cfg["ppo"]["clip_range"] == 0.2
-    assert cfg["ppo"]["ent_coef"] == 0.05
-    assert cfg["ppo"]["learning_rate"] == 6e-6
+    assert cfg["ppo"]["ent_coef"] == 0.1  # 方案 A（DEVIATIONS #16）
+    assert cfg["ppo"]["learning_rate"] == 1e-5  # 方案 A（DEVIATIONS #16）
     assert cfg["ppo"]["normalize_advantage"] is True
-    assert cfg["net"]["layers"] == [287, 128, 64]
+    assert cfg["net"]["layers"] == [99, 128, 64]  # GRU 版（DEVIATIONS #15）
     assert cfg["net"]["activation"] == "PReLU"
     assert cfg["net"]["separate_pi_vf"] is True
     assert cfg["eval"]["deterministic"] is True
     assert cfg["eval"]["eval_seed_base"] == 10000
-    assert cfg["eval"]["eval_episodes"] == 10  # D1 裁决 2026-08-30：全行型统一 10（原 D8 定 5）
-    assert cfg["eval"]["heuristic_episodes"] == 10  # D1 后与 eval_episodes 同值，双轨退役
+    assert (
+        cfg["eval"]["eval_episodes"] == 10
+    )  # D1 裁决 2026-08-30：全行型统一 10（原 D8 定 5）
+    assert (
+        cfg["eval"]["heuristic_episodes"] == 10
+    )  # D1 后与 eval_episodes 同值，双轨退役
     assert cfg["eval"]["ospf_action"] == 0
-    assert cfg["pretrain"]["topology"] == "CERNET.gml"
+    assert (
+        cfg["pretrain"]["topology"] == "Claranet.gml"
+    )  # D6/DEVIATIONS #17（2026-09-09）
     assert cfg["pretrain"]["avgrate"] == 500
-    assert cfg["pretrain"]["episodes"] == 8000
-    assert len(cfg["scenarios"]) == 4
+    assert cfg["pretrain"]["episodes"] == 15000  # 方案 A（DEVIATIONS #16）
+    assert cfg["scenarios"] == [
+        {"topo": "Claranet_failure.gml", "avgrate": 500},
+        {"topo": "Abilene.gml", "avgrate": 500},
+        {"topo": "NFSCNET.gml", "avgrate": 500},
+        {"topo": "Claranet.gml", "avgrate": 1500},
+    ]  # D6 裁决 2026-09-09：场景随源切换
     assert cfg["seeds"] == list(range(10))
 
 
@@ -67,7 +81,11 @@ def test_merge_deep_overrides() -> None:
 def test_resolve_path_against_package_root() -> None:
     """Given 相对/绝对路径；When resolve_path；Then 分别锚定包根 / 原样返回。"""
     relative = resolve_path("topologies/CERNET.gml")
-    assert relative == PKG_ROOT / "topologies" / "CERNET.gml"  # 锚定包根，与检出目录名无关
-    absolute_input = "C:/some/absolute/path.yaml" if os.name == "nt" else "/some/absolute/path.yaml"
+    assert (
+        relative == PKG_ROOT / "topologies" / "CERNET.gml"
+    )  # 锚定包根，与检出目录名无关
+    absolute_input = (
+        "C:/some/absolute/path.yaml" if os.name == "nt" else "/some/absolute/path.yaml"
+    )
     absolute = resolve_path(absolute_input)
     assert absolute == Path(absolute_input)

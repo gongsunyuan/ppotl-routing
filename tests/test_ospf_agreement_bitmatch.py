@@ -38,12 +38,18 @@ def run_pair(tmp_path_factory: Any) -> tuple[Path, Path]:
     """同 run_id 两次 A1 冒烟（Abilene，2 回合，eval_interval=1）：关/开两根目录。"""
     root_off = tmp_path_factory.mktemp("agreement_off")
     root_on = tmp_path_factory.mktemp("agreement_on")
-    off = run_arm("A1", topo=TOPO, rate=RATE, seed=0, episodes=2, config=_config(root_off, False))
-    on = run_arm("A1", topo=TOPO, rate=RATE, seed=0, episodes=2, config=_config(root_on, True))
+    off = run_arm(
+        "A1", topo=TOPO, rate=RATE, seed=0, episodes=2, config=_config(root_off, False)
+    )
+    on = run_arm(
+        "A1", topo=TOPO, rate=RATE, seed=0, episodes=2, config=_config(root_on, True)
+    )
     return off, on
 
 
-def test_flag_not_a_run_id_factor_same_directory_name(run_pair: tuple[Path, Path]) -> None:
+def test_flag_not_a_run_id_factor_same_directory_name(
+    run_pair: tuple[Path, Path],
+) -> None:
     """Given 仅 eval.ospf_agreement_log 不同的两次 run；When 比较 run 目录名；
     Then run_id 相同（观察开关不是 run_id 因素，run_id 确定性红线）。"""
     off, on = run_pair
@@ -57,7 +63,9 @@ def test_metrics_csv_bit_identical_on_off(run_pair: tuple[Path, Path]) -> None:
     assert (off / "metrics.csv").read_bytes() == (on / "metrics.csv").read_bytes()
 
 
-def test_eval_json_identical_except_agreement_field(run_pair: tuple[Path, Path]) -> None:
+def test_eval_json_identical_except_agreement_field(
+    run_pair: tuple[Path, Path],
+) -> None:
     """Given 同上；When 解析两侧 eval.json；Then OFF 侧仅 {curve, final}（final 恰
     四聚合键，纯附加证明）；ON 侧 == OFF 侧 + 顶层 ospf_agreement，无其他差异。"""
     off, on = run_pair
@@ -74,7 +82,9 @@ def test_agreement_value_in_unit_interval(run_pair: tuple[Path, Path]) -> None:
     """Given ON 侧 eval.json 的 ospf_agreement；When 读取；Then per_episode 长度
     =终评回合数 10、逐值与 overall 均 ∈ [0,1]（贪心动作==ospf_action 的比例）。"""
     _, on = run_pair
-    agreement = json.loads((on / "eval.json").read_text(encoding="utf-8"))["ospf_agreement"]
+    agreement = json.loads((on / "eval.json").read_text(encoding="utf-8"))[
+        "ospf_agreement"
+    ]
     assert len(agreement["per_episode"]) == EVAL_EPISODES
     assert all(0.0 <= value <= 1.0 for value in agreement["per_episode"])
     assert 0.0 <= agreement["overall"] <= 1.0

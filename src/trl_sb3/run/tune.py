@@ -63,12 +63,32 @@ from trl_sb3.common.run_artifacts import config_hash, git_state, is_done
 from trl_sb3.run.sweep import _merged_config, plan_runs, task_run_id
 
 # allow: SIZE_OK — 本文件 ~55 行为任务契约交付物 docstring（YAML schema+守卫契约，须随文件走）；纯逻辑 ≈215 LOC，拆分会让 tune import 面目全非。
-_ALLOWED_TRIAL_KEYS = frozenset({"name", "stage", "episodes", "seeds", "grid", "config_overlay"})
+_ALLOWED_TRIAL_KEYS = frozenset(
+    {"name", "stage", "episodes", "seeds", "grid", "config_overlay"}
+)
 _TRIAL_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
-_GUARD_FIELDS = ("tag", "overlay_hash", "grid_hash", "git_commit", "created_config_hash")
+_GUARD_FIELDS = (
+    "tag",
+    "overlay_hash",
+    "grid_hash",
+    "git_commit",
+    "created_config_hash",
+)
 SUMMARY_COLUMNS: tuple[str, ...] = (
-    "tag", "name", "stage", "episodes", "seeds", "status", "exit_code",
-    "planned", "done", "skipped", "failed", "n_a0", "a0_r_mean_mean", "dev_detail",
+    "tag",
+    "name",
+    "stage",
+    "episodes",
+    "seeds",
+    "status",
+    "exit_code",
+    "planned",
+    "done",
+    "skipped",
+    "failed",
+    "n_a0",
+    "a0_r_mean_mean",
+    "dev_detail",
 )
 
 # —— §2.6 GPU 利用率画像定案（2026-08-30，证据 profiling/report.md）——
@@ -129,7 +149,9 @@ class TrialResult:
 
 def _canonical_hash(payload: Any) -> str:
     """sha256 全 hex over canonical JSON（与 run_artifacts.config_hash 同规范）。"""
-    canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    canonical = json.dumps(
+        payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False
+    )
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
@@ -140,10 +162,14 @@ def _parse_trial(raw: Any, index: int) -> Trial:
         raise TrialSpecError('tag 必须派生（f"{name}_{stage}{episodes}"），不得手写')
     unknown = set(raw) - _ALLOWED_TRIAL_KEYS
     if unknown:
-        raise TrialSpecError(f"trial[{index}] 未知键 {sorted(unknown)}；允许键 {sorted(_ALLOWED_TRIAL_KEYS)}")
+        raise TrialSpecError(
+            f"trial[{index}] 未知键 {sorted(unknown)}；允许键 {sorted(_ALLOWED_TRIAL_KEYS)}"
+        )
     name = raw.get("name")
     if not isinstance(name, str) or not _TRIAL_NAME_RE.fullmatch(name):
-        raise TrialSpecError(f"trial[{index}].name 非法 {name!r}：须匹配 {_TRIAL_NAME_RE.pattern}")
+        raise TrialSpecError(
+            f"trial[{index}].name 非法 {name!r}：须匹配 {_TRIAL_NAME_RE.pattern}"
+        )
     stage = raw.get("stage")
     if isinstance(stage, bool) or stage not in ("a", "b", 0):
         raise TrialSpecError(f"trial[{index}].stage 非法 {stage!r}：只允许 a | b | 0")
@@ -152,7 +178,8 @@ def _parse_trial(raw: Any, index: int) -> Trial:
         raise TrialSpecError(f"trial[{index}].episodes 非法 {episodes!r}：须正整数")
     seeds = raw.get("seeds")
     if (
-        not isinstance(seeds, list) or not seeds
+        not isinstance(seeds, list)
+        or not seeds
         or any(isinstance(s, bool) or not isinstance(s, int) for s in seeds)
     ):
         raise TrialSpecError(f"trial[{index}].seeds 非法 {seeds!r}：须非空整数列表")
@@ -171,7 +198,9 @@ def load_trials(source: str | Path | Sequence[dict[str, Any]]) -> list[Trial]:
         doc = yaml.safe_load(Path(source).read_text(encoding="utf-8"))
         entries = doc.get("trials") if isinstance(doc, dict) else doc
         if not isinstance(entries, list):
-            raise TrialSpecError(f"trials 文件根须为 list 或 {{'trials': [...]}}：{source}")
+            raise TrialSpecError(
+                f"trials 文件根须为 list 或 {{'trials': [...]}}：{source}"
+            )
     else:
         entries = list(source)
     trials = [_parse_trial(raw, index) for index, raw in enumerate(entries)]
@@ -185,7 +214,11 @@ def load_trials(source: str | Path | Sequence[dict[str, Any]]) -> list[Trial]:
 def synthesize_grid(trial: Trial, trial_root: Path) -> dict[str, Any]:
     """trial → sweep 网格：trial 级 seeds/episodes 压过 grid.pretrain；overlay
     强制重定向 paths 到 trial_root/{runs,ckpts}（隔离红线，压过用户 overlay.paths）。"""
-    pretrain = {**(trial.grid.get("pretrain") or {}), "seeds": list(trial.seeds), "episodes": trial.episodes}
+    pretrain = {
+        **(trial.grid.get("pretrain") or {}),
+        "seeds": list(trial.seeds),
+        "episodes": trial.episodes,
+    }
     overlay = {
         **trial.overlay,
         "paths": {
@@ -201,10 +234,16 @@ def trial_meta(trial: Trial, base_cfg: dict[str, Any]) -> dict[str, Any]:
     """碰撞守卫用的试验指纹。created_config_hash 与 trial_root 取值无关
     （config_hash 只取协议节），守卫跨路径稳定。"""
     synth = synthesize_grid(trial, Path("<tune_root>") / trial.tag)
-    definition = {"pretrain": {"seeds": list(trial.seeds), "episodes": trial.episodes}, "grid": trial.grid}
+    definition = {
+        "pretrain": {"seeds": list(trial.seeds), "episodes": trial.episodes},
+        "grid": trial.grid,
+    }
     return {
-        "tag": trial.tag, "name": trial.name, "stage": trial.stage,
-        "episodes": trial.episodes, "seeds": list(trial.seeds),
+        "tag": trial.tag,
+        "name": trial.name,
+        "stage": trial.stage,
+        "episodes": trial.episodes,
+        "seeds": list(trial.seeds),
         "overlay_hash": _canonical_hash(trial.overlay),
         "grid_hash": _canonical_hash(definition),
         "git_commit": git_state()[0],
@@ -225,7 +264,9 @@ def check_collision(trial_root: Path, current: dict[str, Any]) -> str:
     try:
         existing = json.loads(meta_path.read_text(encoding="utf-8"))
     except json.JSONDecodeError as exc:
-        raise TrialCollisionError(f"碰撞守卫拒绝：{meta_path} 不可解析（{exc}）——保守拒绝") from exc
+        raise TrialCollisionError(
+            f"碰撞守卫拒绝：{meta_path} 不可解析（{exc}）——保守拒绝"
+        ) from exc
     for field in _GUARD_FIELDS:
         if existing.get(field) != current.get(field):
             raise TrialCollisionError(
@@ -262,7 +303,9 @@ def _execute_pool(commands: Sequence[Sequence[str]], concurrency: int) -> list[i
         return list(executor.map(_execute_trial, commands))
 
 
-def _aggregate(synth: dict[str, Any], base_cfg: dict[str, Any]) -> tuple[int, int, int, int]:
+def _aggregate(
+    synth: dict[str, Any], base_cfg: dict[str, Any]
+) -> tuple[int, int, int, int]:
     """复推 counts：planned=plan_runs 数；done/FAILED 按 run 目录标记；skipped=未执行。"""
     tasks = plan_runs(synth, base_cfg)
     runs_root = resolve_path(_merged_config(synth, base_cfg)["paths"]["runs_dir"])
@@ -292,7 +335,9 @@ def _collect_dev_rows(runs_root: Path) -> tuple[tuple[str, int, float], ...]:
         if manifest.get("arm") != "A0":
             continue
         final = json.loads(eval_path.read_text(encoding="utf-8"))["final"]
-        rows.append((str(manifest["topo"]), int(manifest["rate"]), float(final["r_mean_mean"])))
+        rows.append(
+            (str(manifest["topo"]), int(manifest["rate"]), float(final["r_mean_mean"]))
+        )
     return tuple(sorted(rows))
 
 
@@ -304,17 +349,27 @@ def write_summary(path: Path, results: Sequence[TrialResult]) -> None:
         writer.writeheader()
         for result in results:
             means = [value for _, _, value in result.dev_rows]
-            writer.writerow({
-                "tag": result.tag, "name": result.name, "stage": result.stage,
-                "episodes": result.episodes, "seeds": ";".join(str(s) for s in result.seeds),
-                "status": result.status,
-                "exit_code": "" if result.exit_code is None else result.exit_code,
-                "planned": result.planned, "done": result.done,
-                "skipped": result.skipped, "failed": result.failed,
-                "n_a0": len(result.dev_rows),
-                "a0_r_mean_mean": f"{sum(means) / len(means):.6f}" if means else "",
-                "dev_detail": ";".join(f"{topo}@{rate}={value:.6f}" for topo, rate, value in result.dev_rows),
-            })
+            writer.writerow(
+                {
+                    "tag": result.tag,
+                    "name": result.name,
+                    "stage": result.stage,
+                    "episodes": result.episodes,
+                    "seeds": ";".join(str(s) for s in result.seeds),
+                    "status": result.status,
+                    "exit_code": "" if result.exit_code is None else result.exit_code,
+                    "planned": result.planned,
+                    "done": result.done,
+                    "skipped": result.skipped,
+                    "failed": result.failed,
+                    "n_a0": len(result.dev_rows),
+                    "a0_r_mean_mean": f"{sum(means) / len(means):.6f}" if means else "",
+                    "dev_detail": ";".join(
+                        f"{topo}@{rate}={value:.6f}"
+                        for topo, rate, value in result.dev_rows
+                    ),
+                }
+            )
 
 
 def run_tune(
@@ -336,20 +391,53 @@ def run_tune(
     planned: list[tuple[Trial, dict[str, Any], dict[str, Any], str]] = []
     for trial in load_trials(trials):  # 预检守卫：任一 trial 碰撞即拒，未烧任何算力
         meta = trial_meta(trial, base_cfg)
-        planned.append((trial, synthesize_grid(trial, root / trial.tag), meta, check_collision(root / trial.tag, meta)))
-    print(f"[tune] trials={len(planned)} dry_run={dry_run} device={device} root={root} concurrency={concurrency}")
+        planned.append(
+            (
+                trial,
+                synthesize_grid(trial, root / trial.tag),
+                meta,
+                check_collision(root / trial.tag, meta),
+            )
+        )
+    print(
+        f"[tune] trials={len(planned)} dry_run={dry_run} device={device} root={root} concurrency={concurrency}"
+    )
     if dry_run:
         results: list[TrialResult] = []
         for index, (trial, synth, meta, verdict) in enumerate(planned, start=1):
-            command = [sys.executable, "-m", "trl_sb3.run", "sweep", "--grid", "<grid.yaml>", "--device", device]
-            print(f"[tune {index}/{len(planned)}] tag={trial.tag} {'skip' if verdict == 'skip' else 'fresh'} PLAN {' '.join(command)}")
+            command = [
+                sys.executable,
+                "-m",
+                "trl_sb3.run",
+                "sweep",
+                "--grid",
+                "<grid.yaml>",
+                "--device",
+                device,
+            ]
+            print(
+                f"[tune {index}/{len(planned)}] tag={trial.tag} {'skip' if verdict == 'skip' else 'fresh'} PLAN {' '.join(command)}"
+            )
             planned_n, done_n, skipped_n, failed_n = _aggregate(synth, base_cfg)
-            dev_rows = _collect_dev_rows(resolve_path(_merged_config(synth, base_cfg)["paths"]["runs_dir"]))
-            results.append(TrialResult(
-                tag=trial.tag, name=trial.name, stage=trial.stage, episodes=trial.episodes,
-                seeds=trial.seeds, status=verdict, exit_code=None,
-                planned=planned_n, done=done_n, skipped=skipped_n, failed=failed_n, dev_rows=dev_rows,
-            ))
+            dev_rows = _collect_dev_rows(
+                resolve_path(_merged_config(synth, base_cfg)["paths"]["runs_dir"])
+            )
+            results.append(
+                TrialResult(
+                    tag=trial.tag,
+                    name=trial.name,
+                    stage=trial.stage,
+                    episodes=trial.episodes,
+                    seeds=trial.seeds,
+                    status=verdict,
+                    exit_code=None,
+                    planned=planned_n,
+                    done=done_n,
+                    skipped=skipped_n,
+                    failed=failed_n,
+                    dev_rows=dev_rows,
+                )
+            )
         return results
     # 实跑：先落全部 fresh 试验的指纹+临时网格，再并发执行，最后按定义序聚合（保序）
     with tempfile.TemporaryDirectory(prefix="tune-") as tmp:
@@ -357,16 +445,31 @@ def run_tune(
         fresh_indices: list[int] = []
         for index, (trial, synth, meta, verdict) in enumerate(planned):
             if verdict == "skip":
-                print(f"[tune {index + 1}/{len(planned)}] tag={trial.tag} skipped PLAN (trial_meta 一致)")
+                print(
+                    f"[tune {index + 1}/{len(planned)}] tag={trial.tag} skipped PLAN (trial_meta 一致)"
+                )
                 continue
             trial_root = root / trial.tag
             write_manifest(trial_root / "trial_meta.json", meta)  # 先落指纹再启动子进程
             grid_yaml = Path(tmp) / f"grid_{trial.tag}.yaml"
-            grid_yaml.write_text(yaml.safe_dump(synth, sort_keys=False), encoding="utf-8")
-            command = [sys.executable, "-m", "trl_sb3.run", "sweep", "--grid", str(grid_yaml), "--device", device]
+            grid_yaml.write_text(
+                yaml.safe_dump(synth, sort_keys=False), encoding="utf-8"
+            )
+            command = [
+                sys.executable,
+                "-m",
+                "trl_sb3.run",
+                "sweep",
+                "--grid",
+                str(grid_yaml),
+                "--device",
+                device,
+            ]
             commands.append(command)
             fresh_indices.append(index)
-            print(f"[tune {index + 1}/{len(planned)}] tag={trial.tag} fresh EXEC {' '.join(command)}")
+            print(
+                f"[tune {index + 1}/{len(planned)}] tag={trial.tag} fresh EXEC {' '.join(command)}"
+            )
         exit_codes = _execute_pool(commands, concurrency)
     code_by_index = dict(zip(fresh_indices, exit_codes, strict=True))
     results = []
@@ -377,18 +480,33 @@ def run_tune(
             exit_code = code_by_index[index]
             status = "ok" if exit_code == 0 else "failed"
         planned_n, done_n, skipped_n, failed_n = _aggregate(synth, base_cfg)
-        dev_rows = _collect_dev_rows(resolve_path(_merged_config(synth, base_cfg)["paths"]["runs_dir"]))
-        results.append(TrialResult(
-            tag=trial.tag, name=trial.name, stage=trial.stage, episodes=trial.episodes,
-            seeds=trial.seeds, status=status, exit_code=exit_code,
-            planned=planned_n, done=done_n, skipped=skipped_n, failed=failed_n, dev_rows=dev_rows,
-        ))
+        dev_rows = _collect_dev_rows(
+            resolve_path(_merged_config(synth, base_cfg)["paths"]["runs_dir"])
+        )
+        results.append(
+            TrialResult(
+                tag=trial.tag,
+                name=trial.name,
+                stage=trial.stage,
+                episodes=trial.episodes,
+                seeds=trial.seeds,
+                status=status,
+                exit_code=exit_code,
+                planned=planned_n,
+                done=done_n,
+                skipped=skipped_n,
+                failed=failed_n,
+                dev_rows=dev_rows,
+            )
+        )
         print(
             f"[tune {index + 1}/{len(planned)}] tag={trial.tag} status={status} "
             + f"exit={exit_code if exit_code is not None else '-'} planned={planned_n} done={done_n} "
             + f"skipped={skipped_n} failed={failed_n} a0={len(dev_rows)}"
         )
     write_summary(root / "summary.csv", results)
-    tally = {s: sum(1 for r in results if r.status == s) for s in ("ok", "failed", "skipped")}
+    tally = {
+        s: sum(1 for r in results if r.status == s) for s in ("ok", "failed", "skipped")
+    }
     print(f"[tune] summary: {tally} → {root / 'summary.csv'}")
     return results

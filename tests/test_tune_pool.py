@@ -21,7 +21,12 @@ import pytest
 import yaml
 
 import trl_sb3.run.tune as tune_module
-from trl_sb3.run.tune import DEFAULT_CONCURRENCY, DEFAULT_WORKER_THREADS, TrialSpecError, run_tune
+from trl_sb3.run.tune import (
+    DEFAULT_CONCURRENCY,
+    DEFAULT_WORKER_THREADS,
+    TrialSpecError,
+    run_tune,
+)
 
 SCENARIO = {"topo": "Abilene.gml", "avgrate": 500}
 
@@ -30,7 +35,10 @@ def _trial_dicts(count: int) -> list[dict[str, Any]]:
     """count 个互异 tag 的最小 trial（无臂行 → 聚合便宜,不触真实 runs/）。"""
     return [
         {
-            "name": f"pool{i}", "stage": "a", "episodes": 1, "seeds": [0],
+            "name": f"pool{i}",
+            "stage": "a",
+            "episodes": 1,
+            "seeds": [0],
             "grid": {"scenarios": [SCENARIO]},
         }
         for i in range(count)
@@ -40,7 +48,9 @@ def _trial_dicts(count: int) -> list[dict[str, Any]]:
 class _Recorder:
     """假 _execute_trial:记录活跃并发数/执行序,可选 sleep 与定向失败。"""
 
-    def __init__(self, *, sleep_s: float = 0.25, fail_tags: set[str] | None = None) -> None:
+    def __init__(
+        self, *, sleep_s: float = 0.25, fail_tags: set[str] | None = None
+    ) -> None:
         self.sleep_s: float = sleep_s
         self.fail_tags: set[str] = fail_tags or set()
         self.lock: threading.Lock = threading.Lock()
@@ -90,7 +100,9 @@ def test_concurrency_one_is_serial_characterization(
     assert recorder.max_active == 1
     assert [r.status for r in results] == ["ok"] * 4
     assert recorder.order == [f"pool{i}_a1" for i in range(4)]  # 定义序逐个执行
-    summary = list(csv.DictReader((tmp_path / "rt" / "summary.csv").open(encoding="utf-8")))
+    summary = list(
+        csv.DictReader((tmp_path / "rt" / "summary.csv").open(encoding="utf-8"))
+    )
     assert [row["tag"] for row in summary] == [f"pool{i}_a1" for i in range(4)]
 
 
@@ -104,8 +116,10 @@ def test_pool_failure_isolation(
     results = run_tune(_trial_dicts(4), tune_root=tmp_path / "rt", concurrency=4)
     assert recorder.count == 4  # 兄弟无一被拖垮
     assert [(r.tag, r.status, r.exit_code) for r in results] == [
-        ("pool0_a1", "ok", 0), ("pool1_a1", "ok", 0),
-        ("pool2_a1", "failed", 1), ("pool3_a1", "ok", 0),
+        ("pool0_a1", "ok", 0),
+        ("pool1_a1", "ok", 0),
+        ("pool2_a1", "failed", 1),
+        ("pool3_a1", "ok", 0),
     ]
 
 
@@ -129,7 +143,9 @@ def test_summary_rows_in_definition_order_despite_completion_order(
     results = run_tune(_trial_dicts(3), tune_root=tmp_path / "rt", concurrency=3)
     assert completion == ["pool1_a1", "pool2_a1", "pool0_a1"]  # 完成序确实乱序
     assert [r.tag for r in results] == [f"pool{i}_a1" for i in range(3)]
-    summary = list(csv.DictReader((tmp_path / "rt" / "summary.csv").open(encoding="utf-8")))
+    summary = list(
+        csv.DictReader((tmp_path / "rt" / "summary.csv").open(encoding="utf-8"))
+    )
     assert [row["tag"] for row in summary] == [f"pool{i}_a1" for i in range(3)]
 
 
@@ -161,6 +177,7 @@ def test_concurrency_validated_before_any_execution(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Given concurrency<1；When run_tune；Then 立即 ValueError,零子进程。"""
+
     def boom(_command: list[str]) -> int:
         raise AssertionError("校验失败前不得执行任何子进程")
 
@@ -182,11 +199,29 @@ def test_tune_cli_concurrency_flag_registered(tmp_path: Path) -> None:
     trials_yaml.write_text(
         yaml.safe_dump({"trials": [_trial_dicts(1)[0]]}), encoding="utf-8"
     )
-    for extra, expected in ((["--concurrency", "2"], "concurrency=2"), ([], f"concurrency={DEFAULT_CONCURRENCY}")):
+    for extra, expected in (
+        (["--concurrency", "2"], "concurrency=2"),
+        ([], f"concurrency={DEFAULT_CONCURRENCY}"),
+    ):
         proc = subprocess.run(
-            [sys.executable, "-m", "trl_sb3.run", "tune", "--trials", str(trials_yaml),
-             "--device", "cpu", "--dry-run", "--tune-root", str(tmp_path / "rt"), *extra],
-            capture_output=True, text=True, timeout=300, check=False,
+            [
+                sys.executable,
+                "-m",
+                "trl_sb3.run",
+                "tune",
+                "--trials",
+                str(trials_yaml),
+                "--device",
+                "cpu",
+                "--dry-run",
+                "--tune-root",
+                str(tmp_path / "rt"),
+                *extra,
+            ],
+            capture_output=True,
+            text=True,
+            timeout=300,
+            check=False,
         )
         assert proc.returncode == 0, proc.stderr
         assert expected in proc.stdout
@@ -202,7 +237,10 @@ def test_real_subprocess_pool_demo(tmp_path: Path) -> None:
     summary.csv 3 行定义序;墙钟呈重叠(3 并发 < 0.9×3 串行)。"""
     trials = [
         {
-            "name": f"demo{i}", "stage": "a", "episodes": 1, "seeds": [0],
+            "name": f"demo{i}",
+            "stage": "a",
+            "episodes": 1,
+            "seeds": [0],
             "grid": {"scenarios": [SCENARIO]},
         }
         for i in range(3)
@@ -217,7 +255,9 @@ def test_real_subprocess_pool_demo(tmp_path: Path) -> None:
     for tag in tags:  # 隔离根:每 trial 自己的 runs/ckpts + 指纹
         trial_root = tune_root / tag
         assert (trial_root / "trial_meta.json").is_file()
-        done_runs = [d for d in (trial_root / "runs").iterdir() if (d / "DONE").exists()]
+        done_runs = [
+            d for d in (trial_root / "runs").iterdir() if (d / "DONE").exists()
+        ]
         assert len(done_runs) == 1 and done_runs[0].name.startswith("pretrain-")
     summary = list(csv.DictReader((tune_root / "summary.csv").open(encoding="utf-8")))
     assert [row["tag"] for row in summary] == tags
@@ -229,10 +269,18 @@ def test_real_subprocess_pool_demo(tmp_path: Path) -> None:
 def _single_trial_wall(tmp_path: Path) -> float:
     """同规格单试验 1 个的串行墙钟(计时参照;独立根防 DONE 跳过)。"""
     wall_start = time.perf_counter()
-    result = run_tune([{
-        "name": "wallref", "stage": "a", "episodes": 1, "seeds": [0],
-        "grid": {"scenarios": [SCENARIO]},
-    }], tune_root=tmp_path / "wall_ref")
+    result = run_tune(
+        [
+            {
+                "name": "wallref",
+                "stage": "a",
+                "episodes": 1,
+                "seeds": [0],
+                "grid": {"scenarios": [SCENARIO]},
+            }
+        ],
+        tune_root=tmp_path / "wall_ref",
+    )
     assert result[0].status == "ok"
     return time.perf_counter() - wall_start
 

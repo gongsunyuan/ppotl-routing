@@ -12,12 +12,15 @@ critic 全训练（F7），语义默认以 config/default.yaml freeze 节为出�
 apply_freeze 另接受显式 freeze_cfg 注入（超参传播缝 2：runner 传
 spec.config["freeze"]，per-run 覆盖优先于全局 config）。
 
-冻结锚点映射（config freeze.frozen_layers 条目 ``<net>.N`` → policy 模块）：
-    actor.N  → policy.mlp_extractor.actor[N]   （nn.Sequential 索引）
-    critic.N → policy.mlp_extractor.critic[N]
-当前 config [actor.0, actor.1, actor.2, actor.3] = Linear(287,128) / PReLU /
-Linear(128,64) / PReLU（D4：除输出头外躯干全冻结）；头 = actor[-1] = actor[4]
-Linear(64,3) 重初始化后可训练。
+冻结锚点映射（config freeze.frozen_layers 条目，点分段逐级整数下标）：
+    actor.N    → policy.mlp_extractor.actor[N]        （nn.Sequential 索引）
+    actor.1.N  → policy.mlp_extractor.actor[1][N]     （GRU 版层级，见下）
+    critic.N   → policy.mlp_extractor.critic[N]
+GRU 版（2026-09-02 起）actor = Sequential(FeatureExtractor, MLP)：actor.0 =
+    PathGRU 特征提取器（可训练，不进冻结清单）、actor.1 = MLP Sequential。
+当前 config [actor.1.0, actor.1.1, actor.1.2, actor.1.3] = Linear(99,128) /
+    PReLU / Linear(128,64) / PReLU（MLP 躯干全冻结）；头 = actor[1][4]
+    Linear(64,3) 重初始化后可训练。
 """
 
 from __future__ import annotations
@@ -28,7 +31,6 @@ from typing import Any
 import torch as th
 from stable_baselines3 import PPO
 from torch import Generator
-from torch.nn import Linear
 
 from trl_sb3.common.config import load_config
 from trl_sb3.policy.nets import _init_linear
@@ -36,14 +38,38 @@ from trl_sb3.policy.policy import ActorCriticPolicy, DualLrAdam, split_actor_cri
 
 
 def _module_at(policy: ActorCriticPolicy, anchor: str) -> th.nn.Module:
-    """锚点解析："actor.N"→mlp_extractor.actor[N]；非法网名/索引直接 KeyError/IndexError。"""
-    net_name, _, idx = anchor.partition(".")
+    """锚点解析：点分段逐级整数下标——"actor.N"→mlp_extractor.actor[N]（扁平）、
+    "actor.1.N"→mlp_extractor.actor[1][N]（GRU 版层级，actor.0=FeatureExtractor、
+    actor.1=MLP Sequential）；非法网名/索引直接 KeyError/IndexError。"""
+    parts = anchor.split(".")
     nets = {"actor": policy.mlp_extractor.actor, "critic": policy.mlp_extractor.critic}
-    return nets[net_name][int(idx)]
+    node: th.nn.Module = nets[parts[0]]
+    for seg in parts[1:]:
+        assert isinstance(node, th.nn.Sequential), (
+            f"锚点 {anchor} 中途遇到非 Sequential：{type(node).__name__}"
+        )
+        node = node[int(seg)]
+    return node
+
+
+def _head_linear(actor: th.nn.Sequential) -> th.nn.Linear:
+    """输出头解析：从 actor 容器沿末子模块下钻到最内层 Linear——GRU 版
+    actor=Sequential(FeatureExtractor, MLP) 的头在 actor[1] 末位；扁平版
+    （无嵌套）即 actor[-1] 自身。"""
+    node: th.nn.Module = actor[-1]
+    while isinstance(node, th.nn.Sequential):
+        node = node[-1]
+    assert isinstance(node, th.nn.Linear), (
+        f"输出头应为 Linear，got {type(node).__name__}"
+    )
+    return node
 
 
 def apply_freeze(
-    policy: ActorCriticPolicy, seed: int | None = None, *, freeze_cfg: Mapping[str, Any] | None = None
+    policy: ActorCriticPolicy,
+    seed: int | None = None,
+    *,
+    freeze_cfg: Mapping[str, Any] | None = None,
 ) -> None:
     """按 freeze 节施加 D4 冻结（幂等：重复调用 requires_grad 状态不变）。
 
@@ -62,9 +88,12 @@ def apply_freeze(
     for anchor in cfg["frozen_layers"]:
         _module_at(policy, anchor).requires_grad_(False)
     if cfg["reinit_head"]:
-        head = policy.mlp_extractor.actor[-1]
-        assert isinstance(head, Linear), f"actor[-1] 应为输出头 Linear，got {type(head).__name__}"
-        generator = None if seed is None else Generator(device=head.weight.device.type).manual_seed(seed)
+        head = _head_linear(policy.mlp_extractor.actor)
+        generator = (
+            None
+            if seed is None
+            else Generator(device=head.weight.device.type).manual_seed(seed)
+        )
         _init_linear(head, generator)
         head.requires_grad_(True)
     if cfg["critic_trainable"]:
@@ -79,7 +108,11 @@ def rebuild_optimizer(model: PPO) -> None:
     组（冻结躯干排除、输出头保留）、可训练 critic 全入 critic 组，critic 组
     lr = actor × ratio（0.1 = legacy actor/critic=10×，DEVIATIONS #3）；分区同
     split_actor_critic 口径，前缀之外的可训练参数响亮报错。"""
-    lr = model.learning_rate if isinstance(model.learning_rate, (int, float)) else model.learning_rate(1)
+    lr = (
+        model.learning_rate
+        if isinstance(model.learning_rate, (int, float))
+        else model.learning_rate(1)
+    )
     policy = model.policy
     assert isinstance(policy, ActorCriticPolicy)
     trainable = [p for p in policy.parameters() if p.requires_grad]

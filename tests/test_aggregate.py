@@ -32,12 +32,24 @@ PREREG: dict[str, Any] = {
 }
 # 线性曲线（episode=100i）：A1 seed0 = 0.0..1.0、seed1 平移 +0.05；A2 减半。
 _CURVE_A1_S0 = [{"episode": 100 * i, "r_mean_mean": 0.2 * (i - 1)} for i in range(1, 7)]
-_CURVE_A1_S1 = [{"episode": 100 * i, "r_mean_mean": 0.2 * (i - 1) + 0.05} for i in range(1, 7)]
+_CURVE_A1_S1 = [
+    {"episode": 100 * i, "r_mean_mean": 0.2 * (i - 1) + 0.05} for i in range(1, 7)
+]
 _CURVE_A2_S0 = [{"episode": 100 * i, "r_mean_mean": 0.1 * (i - 1)} for i in range(1, 7)]
-_CURVE_A2_S1 = [{"episode": 100 * i, "r_mean_mean": 0.1 * (i - 1) + 0.05} for i in range(1, 7)]
+_CURVE_A2_S1 = [
+    {"episode": 100 * i, "r_mean_mean": 0.1 * (i - 1) + 0.05} for i in range(1, 7)
+]
 _RECORD_KEYS = {
-    "run_id", "arm", "topo", "rate", "seed", "episodes",
-    "factors", "source_run_id", "curve", "final",
+    "run_id",
+    "arm",
+    "topo",
+    "rate",
+    "seed",
+    "episodes",
+    "factors",
+    "source_run_id",
+    "curve",
+    "final",
 }
 
 
@@ -65,7 +77,8 @@ def _write_run(
     }
     (directory / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
     (directory / "eval.json").write_text(
-        json.dumps({"curve": curve or [], "final": {"r_mean_mean": final}}), encoding="utf-8"
+        json.dumps({"curve": curve or [], "final": {"r_mean_mean": final}}),
+        encoding="utf-8",
     )
     if done:
         (directory / "DONE").write_text("", encoding="utf-8")
@@ -91,14 +104,23 @@ def test_collect_runs_reads_only_done_contract_fields(tmp_path: Path) -> None:
     records = _pilot_records(tmp_path)
     assert len(records) == 6
     assert set(records[0]) == _RECORD_KEYS
-    assert {r["run_id"] for r in records} == {"ospf-1", "ecmp-1", "a1-s0", "a1-s1", "a2-s0", "a2-s1"}
+    assert {r["run_id"] for r in records} == {
+        "ospf-1",
+        "ecmp-1",
+        "a1-s0",
+        "a1-s1",
+        "a2-s0",
+        "a2-s1",
+    }
 
 
 def test_derive_theta_ospf_best_arm_and_pooled_sd(tmp_path: Path) -> None:
     """Given A1 渐近均值 0.625（最优）、A2 0.325、种子级偏离 ±0.025、OSPF=0.10；
     When derive_theta；Then θ = max(0.10, 0.625 − sqrt(0.0025/2))。"""
     sigma = (0.0025 / 2) ** 0.5
-    assert derive_theta(_pilot_records(tmp_path), PREREG) == pytest.approx(max(0.10, 0.625 - sigma))
+    assert derive_theta(_pilot_records(tmp_path), PREREG) == pytest.approx(
+        max(0.10, 0.625 - sigma)
+    )
 
 
 def test_derive_theta_prereg_value_wins(tmp_path: Path) -> None:
@@ -125,13 +147,18 @@ def test_compute_table_rows_censoring_and_eval_only(tmp_path: Path) -> None:
     assert a1["theta"] == pytest.approx(theta)
     assert a1["tau"]["n_censored"] == 0
     assert set(a1["tau"]["by_seed"]) == {0, 1}
-    assert a1["window_auc"]["by_seed"] == {0: pytest.approx(0.32), 1: pytest.approx(0.36)}
+    assert a1["window_auc"]["by_seed"] == {
+        0: pytest.approx(0.32),
+        1: pytest.approx(0.36),
+    }
     assert a1["asymptote"]["mean"] == pytest.approx(0.625)
     assert a1["asymptote"]["ci95"][0] < 0.625 < a1["asymptote"]["ci95"][1]
     a2 = rows["A2"]
     assert a2["tau"]["n_censored"] == 2
     assert a2["tau"]["by_seed"] == {0: 500.0, 1: 500.0}
-    assert rows["OSPF"]["tau"] is None and rows["OSPF"]["final_mean"] == pytest.approx(0.10)
+    assert rows["OSPF"]["tau"] is None and rows["OSPF"]["final_mean"] == pytest.approx(
+        0.10
+    )
     assert rows["ECMP"]["final_mean"] == pytest.approx(0.05)
 
 
@@ -141,12 +168,18 @@ def test_compute_table_excludes_pretrain_rows(tmp_path: Path) -> None:
     records = _pilot_records(tmp_path)
     runs = tmp_path / "runs"
     _write_run(
-        runs, "pre-s0", "pretrain", 0,
-        curve=[{"episode": 100 * i, "r_mean_mean": 2.0} for i in range(1, 7)], final=2.0,
+        runs,
+        "pre-s0",
+        "pretrain",
+        0,
+        curve=[{"episode": 100 * i, "r_mean_mean": 2.0} for i in range(1, 7)],
+        final=2.0,
     )
     all_records = collect_runs(runs)
     assert "pretrain" not in {row["arm"] for row in compute_table(all_records, PREREG)}
-    assert derive_theta(all_records, PREREG) == pytest.approx(derive_theta(records, PREREG))
+    assert derive_theta(all_records, PREREG) == pytest.approx(
+        derive_theta(records, PREREG)
+    )
 
 
 def test_paired_arm_diffs_pairs_by_seed(tmp_path: Path) -> None:
@@ -177,8 +210,20 @@ def test_compute_table_survives_two_point_curves(tmp_path: Path) -> None:
     runs = tmp_path / "runs"
     runs.mkdir()
     _write_run(runs, "ospf-1", "OSPF", 0, final=0.10)
-    _write_run(runs, "a1-s0", "A1", 0, curve=[{"episode": 100, "r_mean_mean": 0.1}, {"episode": 200, "r_mean_mean": 0.5}], final=0.50)
-    _write_run(runs, "a2-s0", "A2", 0, curve=[{"episode": 100, "r_mean_mean": 0.2}], final=0.20)
+    _write_run(
+        runs,
+        "a1-s0",
+        "A1",
+        0,
+        curve=[
+            {"episode": 100, "r_mean_mean": 0.1},
+            {"episode": 200, "r_mean_mean": 0.5},
+        ],
+        final=0.50,
+    )
+    _write_run(
+        runs, "a2-s0", "A2", 0, curve=[{"episode": 100, "r_mean_mean": 0.2}], final=0.20
+    )
     records = collect_runs(runs)
     rows = {row["arm"]: row for row in compute_table(records, PREREG)}
     assert rows["A1"]["tau"] is not None and set(rows["A1"]["tau"]["by_seed"]) == {0}

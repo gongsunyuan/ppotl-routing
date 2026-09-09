@@ -57,7 +57,9 @@ def _scene_text(scene: tuple[str, int]) -> str:
     return f"{topo_label(scene[0])}@{scene[1]}"
 
 
-def normalization_denominators(records: list[dict[str, Any]]) -> dict[tuple[str, int], float]:
+def normalization_denominators(
+    records: list[dict[str, Any]],
+) -> dict[tuple[str, int], float]:
     """逐 (topo, rate) 场景：跨全部参与 run 的 r_mean_mean 最大值（tex:475 口径）。
 
     曲线点与 final 一并参与取 max——分母是"该场景全部实验运行中见过的最大值"，
@@ -85,7 +87,9 @@ def normalize_records(
     → ValueError（宁可失败勿默算）。
     """
     denominators = normalization_denominators(records)
-    nonpositive = {scene: value for scene, value in denominators.items() if value <= 0.0}
+    nonpositive = {
+        scene: value for scene, value in denominators.items() if value <= 0.0
+    }
     if nonpositive:
         raise ValueError(f"归一化分母须为正（场景最大 r_mean_mean ≤0）：{nonpositive}")
     normalized: list[dict[str, Any]] = []
@@ -100,7 +104,10 @@ def normalize_records(
                     {**point, "r_mean_mean": float(point["r_mean_mean"]) / denominator}
                     for point in record["curve"]
                 ],
-                "final": {**record["final"], "r_mean_mean": float(record["final"]["r_mean_mean"]) / denominator},
+                "final": {
+                    **record["final"],
+                    "r_mean_mean": float(record["final"]["r_mean_mean"]) / denominator,
+                },
             }
         )
     return normalized, denominators
@@ -115,16 +122,22 @@ def _arm_scene_points(
         if record["arm"] != arm or _scene_of(record) != scene:
             continue
         for point in record["curve"]:
-            points.setdefault(int(point["episode"]), []).append(float(point["r_mean_mean"]))
+            points.setdefault(int(point["episode"]), []).append(
+                float(point["r_mean_mean"])
+            )
     return points
 
 
-def _final_mean(records: list[dict[str, Any]], arm: str, scene: tuple[str, int]) -> float | None:
+def _final_mean(
+    records: list[dict[str, Any]], arm: str, scene: tuple[str, int]
+) -> float | None:
     """(arm, scene) 的 final r_mean_mean 种子均值；无记录 → None。"""
     finals = [
         float(record["final"]["r_mean_mean"])
         for record in records
-        if record["arm"] == arm and _scene_of(record) == scene and record["final"].get("r_mean_mean") is not None
+        if record["arm"] == arm
+        and _scene_of(record) == scene
+        and record["final"].get("r_mean_mean") is not None
     ]
     return mean(finals) if finals else None
 
@@ -132,15 +145,24 @@ def _final_mean(records: list[dict[str, Any]], arm: str, scene: tuple[str, int])
 def _ordered_arms(records: list[dict[str, Any]]) -> list[str]:
     """学习臂出场序：ARM_ORDER 在前，未知臂字典序殿后。"""
     present = {
-        record["arm"] for record in records if record["curve"] and record["arm"] not in NON_SCORING_ARMS
+        record["arm"]
+        for record in records
+        if record["curve"] and record["arm"] not in NON_SCORING_ARMS
     }
-    return [arm for arm in _ARM_ORDER if arm in present] + sorted(present - set(_ARM_ORDER))
+    return [arm for arm in _ARM_ORDER if arm in present] + sorted(
+        present - set(_ARM_ORDER)
+    )
 
 
-def _censored_rows(rows: dict[tuple[str, str, int], dict[str, Any]], arm: str, scenes: list[tuple[str, int]]) -> bool:
+def _censored_rows(
+    rows: dict[tuple[str, str, int], dict[str, Any]],
+    arm: str,
+    scenes: list[tuple[str, int]],
+) -> bool:
     """该臂是否存在全删失场景行（τ 竖线落在 W 上需要子图标注）。"""
     return any(
-        (rows.get((arm, *scene)) or {}).get("tau") and rows[arm, *scene]["tau"]["n_censored"] >= rows[arm, *scene]["n_seeds"]
+        (rows.get((arm, *scene)) or {}).get("tau")
+        and rows[arm, *scene]["tau"]["n_censored"] >= rows[arm, *scene]["n_seeds"]
         for scene in scenes
     )
 
@@ -154,11 +176,17 @@ def build_adaptation_figure(
     边界虚线 + 子图标注 censored；未删失 → τ 均值虚线。OSPF/ECMP/LB/RR 逐
     场景水平参考线（灰点线）。多场景 → 同子图逐场景多色曲线。
     """
-    scenes = sorted({_scene_of(r) for r in records_norm if r["arm"] not in NON_SCORING_ARMS})
+    scenes = sorted(
+        {_scene_of(r) for r in records_norm if r["arm"] not in NON_SCORING_ARMS}
+    )
     arms = _ordered_arms(records_norm)
-    colors = dict(zip(scenes, plt.rcParams["axes.prop_cycle"].by_key()["color"], strict=False))
+    colors = dict(
+        zip(scenes, plt.rcParams["axes.prop_cycle"].by_key()["color"], strict=False)
+    )
     rows = {(row["arm"], row["topo"], row["rate"]): row for row in table}
-    fig, axes = plt.subplots(2, 4, figsize=(16.5, 7.5), sharey=True, constrained_layout=True)
+    fig, axes = plt.subplots(
+        2, 4, figsize=(16.5, 7.5), sharey=True, constrained_layout=True
+    )
     for index, ax in enumerate(axes.flat):
         if index >= len(arms):
             ax.set_visible(False)
@@ -171,23 +199,35 @@ def build_adaptation_figure(
                 continue
             episodes = sorted(points)
             means = [mean(points[e]) for e in episodes]
-            halves = [mean_t_ci(points[e])[1] if len(points[e]) >= 2 else None for e in episodes]
+            halves = [
+                mean_t_ci(points[e])[1] if len(points[e]) >= 2 else None
+                for e in episodes
+            ]
             ax.plot(
-                episodes, means, color=colors[scene], marker="o", markersize=3,
-                linewidth=1.5, label=_scene_text(scene) if index == 0 else None,
+                episodes,
+                means,
+                color=colors[scene],
+                marker="o",
+                markersize=3,
+                linewidth=1.5,
+                label=_scene_text(scene) if index == 0 else None,
             )
             ax.fill_between(
                 episodes,
                 [m - (h or 0.0) for m, h in zip(means, halves)],
                 [m + (h or 0.0) for m, h in zip(means, halves)],
-                color=colors[scene], alpha=0.18, linewidth=0,
+                color=colors[scene],
+                alpha=0.18,
+                linewidth=0,
             )
             xmax = max(xmax, episodes[-1])
             row = rows.get((arm, *scene))
             if row and row["tau"]:
                 all_censored = row["tau"]["n_censored"] >= row["n_seeds"]
                 tau_x = float(window if all_censored else row["tau"]["mean"])
-                ax.axvline(tau_x, color=colors[scene], linestyle="--", linewidth=1.2, alpha=0.8)
+                ax.axvline(
+                    tau_x, color=colors[scene], linestyle="--", linewidth=1.2, alpha=0.8
+                )
                 xmax = max(xmax, tau_x)
         for scene in scenes:
             for ref in _REF_ARMS:
@@ -197,12 +237,23 @@ def build_adaptation_figure(
         ax.set_xlim(0, xmax * 1.03)
         ax.set_title(arm, fontsize=11)
         if _censored_rows(rows, arm, scenes):
-            ax.text(0.98, 0.95, "τ censored", transform=ax.transAxes, ha="right", va="top", fontsize=8)
+            ax.text(
+                0.98,
+                0.95,
+                "τ censored",
+                transform=ax.transAxes,
+                ha="right",
+                va="top",
+                fontsize=8,
+            )
     axes.flat[0].set_ylim(-0.05, 1.05)
     fig.supxlabel("Episode")
     fig.supylabel("Normalized r_mean (per-scene max across runs)")
     fig.suptitle("Adaptation curves by arm (seed mean ±95% CI)", fontsize=13)
-    handles = [Line2D([0], [0], color=colors[s], linewidth=1.5, label=_scene_text(s)) for s in scenes]
+    handles = [
+        Line2D([0], [0], color=colors[s], linewidth=1.5, label=_scene_text(s))
+        for s in scenes
+    ]
     if len(scenes) == 1:
         handles += [
             Line2D([0], [0], color="0.45", linestyle=":", label=ref)
@@ -210,9 +261,24 @@ def build_adaptation_figure(
             if _final_mean(records_norm, ref, scenes[0]) is not None
         ]
     else:
-        handles.append(Line2D([0], [0], color="0.45", linestyle=":", label="OSPF/ECMP/LB/RR"))
-    handles.append(Line2D([0], [0], color="0.15", linestyle="--", label=f"τ (at W={window} if censored)"))
-    fig.legend(handles=handles, loc="outside lower center", ncol=min(len(handles), 9), frameon=False)
+        handles.append(
+            Line2D([0], [0], color="0.45", linestyle=":", label="OSPF/ECMP/LB/RR")
+        )
+    handles.append(
+        Line2D(
+            [0],
+            [0],
+            color="0.15",
+            linestyle="--",
+            label=f"τ (at W={window} if censored)",
+        )
+    )
+    fig.legend(
+        handles=handles,
+        loc="outside lower center",
+        ncol=min(len(handles), 9),
+        frameon=False,
+    )
     return fig
 
 
@@ -225,7 +291,9 @@ def _bar_order(arm: str) -> tuple[int, int | str]:
     return (2, arm)
 
 
-def build_asymptote_figure(table: list[dict[str, Any]], denominators: dict[tuple[str, int], float]) -> Figure:
+def build_asymptote_figure(
+    table: list[dict[str, Any]], denominators: dict[tuple[str, int], float]
+) -> Figure:
     """图 2（纯函数）：逐场景归一化渐近性能柱（±95%CI 误差棒）+ 参照柱并列。
 
     学习臂柱高 = asymptote.mean ÷ 场景分母、误差棒 = CI 半宽 ÷ 分母；
@@ -238,9 +306,13 @@ def build_asymptote_figure(table: list[dict[str, Any]], denominators: dict[tuple
     ncols = min(len(scenes), 2)
     nrows = -(-len(scenes) // ncols)
     fig, axes = plt.subplots(
-        nrows, ncols, figsize=(7.2 * ncols, 4.8 * nrows), squeeze=False, constrained_layout=True
+        nrows,
+        ncols,
+        figsize=(7.2 * ncols, 4.8 * nrows),
+        squeeze=False,
+        constrained_layout=True,
     )
-    for ax in axes.flat[len(scenes):]:
+    for ax in axes.flat[len(scenes) :]:
         ax.set_visible(False)
     skipped: list[str] = []
     for ax, scene in zip(axes.flat, scenes):
@@ -249,32 +321,54 @@ def build_asymptote_figure(table: list[dict[str, Any]], denominators: dict[tuple
         heights: list[float] = []
         errors: list[float] = []
         bar_colors: list[str] = []
-        for row in sorted((r for r in table if (r["topo"], r["rate"]) == scene), key=lambda r: _bar_order(r["arm"])):
+        for row in sorted(
+            (r for r in table if (r["topo"], r["rate"]) == scene),
+            key=lambda r: _bar_order(r["arm"]),
+        ):
             is_ref = row["arm"] in _REF_BARS
             if not is_ref and row["asymptote"] is None:
                 skipped.append(f"{row['arm']}@{_scene_text(scene)}")
                 continue
             labels.append(row["arm"])
-            heights.append((row["asymptote"]["mean"] if row["asymptote"] else row["final_mean"]) / denominator)
+            heights.append(
+                (row["asymptote"]["mean"] if row["asymptote"] else row["final_mean"])
+                / denominator
+            )
             ci = row["asymptote"]["ci95"] if row["asymptote"] else None
             errors.append((ci[1] - ci[0]) / 2.0 / denominator if ci else 0.0)
             bar_colors.append(_REF_COLOR if is_ref else _ARM_COLOR)
         positions = range(len(labels))
-        ax.bar(positions, heights, yerr=errors, capsize=3, color=bar_colors, edgecolor="black", linewidth=0.4)
+        ax.bar(
+            positions,
+            heights,
+            yerr=errors,
+            capsize=3,
+            color=bar_colors,
+            edgecolor="black",
+            linewidth=0.4,
+        )
         ax.set_xticks(list(positions), labels, rotation=45, ha="right", fontsize=8)
         ax.set_ylim(0, 1.15)
         ax.set_title(_scene_text(scene), fontsize=11)
         ax.set_ylabel("Normalized asymptotic performance" if ncols == 1 else None)
     fig.suptitle("Asymptotic performance by arm (normalized, ±95% CI)", fontsize=13)
     if skipped:
-        fig.text(0.5, -0.02, f"Asymptote not estimable (curves <2 points): {', '.join(skipped)}",
-                 ha="center", fontsize=8)
+        fig.text(
+            0.5,
+            -0.02,
+            f"Asymptote not estimable (curves <2 points): {', '.join(skipped)}",
+            ha="center",
+            fontsize=8,
+        )
     return fig
 
 
 # —— 叙事增项（计划 §5 主表余量，EXPLORATORY；metrics_prereg.yaml narrative_extras）——
 
-def _finals_by_seed(records: list[dict[str, Any]], arm: str, scene: tuple[str, int]) -> dict[int, float]:
+
+def _finals_by_seed(
+    records: list[dict[str, Any]], arm: str, scene: tuple[str, int]
+) -> dict[int, float]:
     """(arm, scene) 内逐种子 final r_mean_mean → {seed: value}（final 缺席的行不入）。
 
     同种子重复行（如冒烟网格多源 A0）取 collect_runs 目录序最后一行——确定性
@@ -282,7 +376,8 @@ def _finals_by_seed(records: list[dict[str, Any]], arm: str, scene: tuple[str, i
     return {
         int(record["seed"]): float(record["final"]["r_mean_mean"])
         for record in records
-        if record["arm"] == arm and _scene_of(record) == scene
+        if record["arm"] == arm
+        and _scene_of(record) == scene
         and record["final"].get("r_mean_mean") is not None
     }
 
@@ -290,10 +385,16 @@ def _finals_by_seed(records: list[dict[str, Any]], arm: str, scene: tuple[str, i
 def _seed_summary(finals: dict[int, float]) -> dict[str, Any]:
     """种子间汇总：mean + SD（n=1 无 SD → 0，误差棒退化）。"""
     values = list(finals.values())
-    return {"mean": mean(values), "sd": stdev(values) if len(values) >= 2 else 0.0, "n_seeds": len(values)}
+    return {
+        "mean": mean(values),
+        "sd": stdev(values) if len(values) >= 2 else 0.0,
+        "n_seeds": len(values),
+    }
 
 
-def delta_ospf_stats(records: list[dict[str, Any]]) -> dict[tuple[str, int], dict[str, dict[str, Any]]]:
+def delta_ospf_stats(
+    records: list[dict[str, Any]],
+) -> dict[tuple[str, int], dict[str, dict[str, Any]]]:
     """逐场景 Δ-vs-OSPF 统计（图 3 数据，EXPLORATORY）：每学习臂（final 在场、
     非 NON_SCORING_ARMS）Δ = 种子均值(final) − OSPF final 种子均值，sd = 臂内
     种子 SD。场景需 OSPF final 与 ≥1 学习臂 final，否则整场景跳过（优雅降级）。"""
@@ -311,13 +412,18 @@ def delta_ospf_stats(records: list[dict[str, Any]]) -> dict[tuple[str, int], dic
             continue
         ospf_mean = mean(list(ospf_finals.values()))
         stats[scene] = {
-            arm: {"delta": mean(list(finals.values())) - ospf_mean, **_seed_summary(finals)}
+            arm: {
+                "delta": mean(list(finals.values())) - ospf_mean,
+                **_seed_summary(finals),
+            }
             for arm, finals in arm_finals.items()
         }
     return stats
 
 
-def generalization_gap_stats(records: list[dict[str, Any]]) -> dict[tuple[str, int], dict[str, Any]]:
+def generalization_gap_stats(
+    records: list[dict[str, Any]],
+) -> dict[tuple[str, int], dict[str, Any]]:
     """逐场景泛化差距统计（图 4 数据，EXPLORATORY）：A0 final vs 同种子适应臂
     final。适应臂 = A6 在场取 A6（全方法臂，计划 §5 A6 先行波口径），否则取该
     场景 final 种子均值最优学习臂；paired_gap = 逐共享种子 (adapted − A0) 均值。
@@ -337,7 +443,9 @@ def generalization_gap_stats(records: list[dict[str, Any]]) -> dict[tuple[str, i
         if "A6" in candidates:
             arm = "A6"
         else:  # 最优适应臂：种子均值并列时字典序首者（确定性）
-            arm = min(candidates, key=lambda a: (-mean(list(candidates[a].values())), a))
+            arm = min(
+                candidates, key=lambda a: (-mean(list(candidates[a].values())), a)
+            )
         adapted_finals = candidates[arm]
         shared = sorted(set(a0_finals) & set(adapted_finals))
         if not shared:
@@ -357,9 +465,13 @@ def _scene_grid(scenes: list[tuple[str, int]]) -> tuple[Figure, Any]:
     ncols = min(len(scenes), 2)
     nrows = -(-len(scenes) // ncols)
     fig, axes = plt.subplots(
-        nrows, ncols, figsize=(6.4 * ncols, 4.2 * nrows), squeeze=False, constrained_layout=True
+        nrows,
+        ncols,
+        figsize=(6.4 * ncols, 4.2 * nrows),
+        squeeze=False,
+        constrained_layout=True,
     )
-    for ax in axes.flat[len(scenes):]:
+    for ax in axes.flat[len(scenes) :]:
         ax.set_visible(False)
     return fig, axes
 
@@ -370,7 +482,9 @@ def build_delta_ospf_figure(records: list[dict[str, Any]]) -> Figure:
     final 的场景不入图；全场景降级 → ValueError（调用方跳过整图）。"""
     stats = delta_ospf_stats(records)
     if not stats:
-        raise ValueError("Δ-vs-OSPF 无可画场景：缺 OSPF 行或学习臂 final（叙事增项，EXPLORATORY）")
+        raise ValueError(
+            "Δ-vs-OSPF 无可画场景：缺 OSPF 行或学习臂 final（叙事增项，EXPLORATORY）"
+        )
     scenes = sorted(stats)
     fig, axes = _scene_grid(scenes)
     for ax, scene in zip(axes.flat, scenes):
@@ -381,13 +495,20 @@ def build_delta_ospf_figure(records: list[dict[str, Any]]) -> Figure:
             positions,
             [arm_stats[arm]["delta"] for arm in arms],
             yerr=[arm_stats[arm]["sd"] for arm in arms],
-            capsize=3, color=_ARM_COLOR, edgecolor="black", linewidth=0.4,
+            capsize=3,
+            color=_ARM_COLOR,
+            edgecolor="black",
+            linewidth=0.4,
         )
         ax.axhline(0.0, color="0.15", linewidth=1.0)  # OSPF parity
         ax.set_xticks(list(positions), arms, rotation=45, ha="right", fontsize=8)
         ax.set_title(_scene_text(scene), fontsize=11)
-        ax.set_ylabel("Δ final r_mean vs OSPF (seed mean ± SD)" if len(scenes) <= 2 else None)
-    fig.suptitle("Δ vs OSPF by arm (final r_mean, seed mean ± SD; exploratory)", fontsize=13)
+        ax.set_ylabel(
+            "Δ final r_mean vs OSPF (seed mean ± SD)" if len(scenes) <= 2 else None
+        )
+    fig.suptitle(
+        "Δ vs OSPF by arm (final r_mean, seed mean ± SD; exploratory)", fontsize=13
+    )
     return fig
 
 
@@ -397,7 +518,9 @@ def build_generalization_gap_figure(records: list[dict[str, Any]]) -> Figure:
     学习臂 final 或无共享种子的场景不入图；全场景降级 → ValueError。"""
     stats = generalization_gap_stats(records)
     if not stats:
-        raise ValueError("泛化差距无可画场景：缺 A0 行或学习臂 final（叙事增项，EXPLORATORY）")
+        raise ValueError(
+            "泛化差距无可画场景：缺 A0 行或学习臂 final（叙事增项，EXPLORATORY）"
+        )
     scenes = sorted(stats)
     fig, axes = _scene_grid(scenes)
     for ax, scene in zip(axes.flat, scenes):
@@ -406,15 +529,27 @@ def build_generalization_gap_figure(records: list[dict[str, Any]]) -> Figure:
         heights = [row["a0"]["mean"], row["adapted"]["mean"]]
         errors = [row["a0"]["sd"], row["adapted"]["sd"]]
         ax.bar(
-            [0, 1], heights, yerr=errors, capsize=4,
-            color=[_REF_COLOR, _ARM_COLOR], edgecolor="black", linewidth=0.4,
+            [0, 1],
+            heights,
+            yerr=errors,
+            capsize=4,
+            color=[_REF_COLOR, _ARM_COLOR],
+            edgecolor="black",
+            linewidth=0.4,
         )
         ax.set_xticks([0, 1], labels)
         ax.set_title(_scene_text(scene), fontsize=11)
         ax.set_ylabel("Final r_mean (seed mean ± SD)" if len(scenes) <= 2 else None)
         ax.text(
-            0.02, 0.95, f"paired gap (n={len(row['shared_seeds'])}): {row['paired_gap']:+.4f}",
-            transform=ax.transAxes, ha="left", va="top", fontsize=8,
+            0.02,
+            0.95,
+            f"paired gap (n={len(row['shared_seeds'])}): {row['paired_gap']:+.4f}",
+            transform=ax.transAxes,
+            ha="left",
+            va="top",
+            fontsize=8,
         )
-    fig.suptitle("Generalization gap: A0 vs adapted arm (final r_mean; exploratory)", fontsize=13)
+    fig.suptitle(
+        "Generalization gap: A0 vs adapted arm (final r_mean; exploratory)", fontsize=13
+    )
     return fig

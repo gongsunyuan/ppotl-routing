@@ -34,7 +34,18 @@ from trl_sb3.train.runner import _build_model, _RunSpec
 
 TOPO = "Abilene.gml"
 RATE = 500
-DEFAULT_HIDDEN_SHAPES = [(128, 287), (64, 128), (3, 64)]  # default.yaml net.layers [287,128,64]
+# GRU 版 actor/critic = Sequential(FeatureExtractor, MLP)：2 维参数含 GRU
+# weight_ih/hh（(96,3)/(96,32)）+ MLP Linears（config net.layers [99,128,64]）
+DEFAULT_HIDDEN_SHAPES = [(96, 3), (96, 32), (128, 99), (64, 128), (3, 64)]
+DEFAULT_CRITIC_SHAPES = [(96, 3), (96, 32), (128, 99), (64, 128), (1, 64)]
+HEAD_PREFIX = "mlp_extractor.actor.1.4."  # GRU 版：actor[1]=MLP，头=actor[1][4]
+
+
+def _mlp(net: th.nn.Sequential) -> th.nn.Sequential:
+    """取内层 MLP（GRU 版 net=Sequential(FeatureExtractor, MLP)）；静态收窄供索引断言。"""
+    inner = net[-1]
+    assert isinstance(inner, th.nn.Sequential)
+    return inner
 
 
 def _vec() -> VecMonitor:
@@ -65,46 +76,70 @@ def _policy(**policy_kwargs: Any) -> ActorCriticPolicy:
     try:
         th.manual_seed(SEED)
         return ActorCriticPolicy(
-            vec.observation_space, vec.action_space, lr_schedule=lambda _: 6.0e-6, **policy_kwargs
+            vec.observation_space,
+            vec.action_space,
+            lr_schedule=lambda _: 6.0e-6,
+            **policy_kwargs,
         )
     finally:
         vec.close()
 
 
 def test_default_config_architecture_characterization() -> None:
-    """Given 不传 policy_kwargs 的 policy；When 构建；Then 隐层 = default.yaml
-    net.layers [287,128,64] 的 [(128,287),(64,128),(3,64)]（无覆盖回落路径表征，
-    改前改后都必须过——默认行为逐位不变的锚点）。"""
+    """Given 不传 policy_kwargs 的 policy；When 构建；Then 2 维参数形状 = default.yaml
+    net.layers [99,128,64] 的 GRU 版结构（FeatureExtractor + MLP，无覆盖回落路径
+    表征，改前改后都必须过——默认行为逐位不变的锚点）。"""
     policy = _policy()
     assert _layer_shapes(policy.mlp_extractor.actor) == DEFAULT_HIDDEN_SHAPES
-    assert _layer_shapes(policy.mlp_extractor.critic) == [(128, 287), (64, 128), (1, 64)]
+    assert _layer_shapes(policy.mlp_extractor.critic) == DEFAULT_CRITIC_SHAPES
 
 
 def test_build_model_propagates_net_layers_override(tmp_path: Path) -> None:
-    """Given net.layers 覆盖为 [287,32,16] 的注入 config；When _build_model；
-    Then policy 隐层形状反映覆盖 [(32,287),(16,32),(3,16)]——修前这里 RED：
-    policy 读全局 load_config() 出 [(128,287),...]，覆盖被静默忽略（本缝要修的 bug）。"""
-    cfg = merge(load_config(), {"net": {"layers": [287, 32, 16]}})
+    """Given net.layers 覆盖为 [99,32,16] 的注入 config；When _build_model；
+    Then policy MLP 隐层形状反映覆盖 [(32,99),(16,32),(3,16)]（GRU 权重不受
+    覆盖影响）——修前这里 RED：policy 读全局 load_config() 出 [(128,99),...]，
+    覆盖被静默忽略（本缝要修的 bug）。"""
+    cfg = merge(load_config(), {"net": {"layers": [99, 32, 16]}})
     vec = _vec()
     try:
         model = _build_model(vec, _spec(cfg, out_root=tmp_path), tmp_path / "ckpts")
         assert isinstance(model.policy, ActorCriticPolicy)
-        assert _layer_shapes(model.policy.mlp_extractor.actor) == [(32, 287), (16, 32), (3, 16)]
-        assert _layer_shapes(model.policy.mlp_extractor.critic) == [(32, 287), (16, 32), (1, 16)]
+        assert _layer_shapes(model.policy.mlp_extractor.actor) == [
+            (96, 3),
+            (96, 32),
+            (32, 99),
+            (16, 32),
+            (3, 16),
+        ]
+        assert _layer_shapes(model.policy.mlp_extractor.critic) == [
+            (96, 3),
+            (96, 32),
+            (32, 99),
+            (16, 32),
+            (1, 16),
+        ]
     finally:
         vec.close()
 
 
 def test_policy_kwargs_net_layers_shape_and_default_optimizer() -> None:
-    """Given net_layers=(287,64,64)+lr_critic_ratio=0.1 的 policy_kwargs；When 直接
+    """Given net_layers=(99,64,64)+lr_critic_ratio=0.1 的 policy_kwargs；When 直接
     构造 policy；Then 形状按注入构网、ratio 存为属性并生效为双参数组 Adam（缝 3
     起消费：两组 lr=[6e-6, 6e-7]，critic/actor=0.1 复刻 legacy actor/critic=10×，
     DEVIATIONS #3）；defaults lr 仍 6.0e-6（actor 基值）。"""
-    policy = _policy(net_layers=(287, 64, 64), lr_critic_ratio=0.1)
-    assert _layer_shapes(policy.mlp_extractor.actor) == [(64, 287), (64, 64), (3, 64)]
+    policy = _policy(net_layers=(99, 64, 64), lr_critic_ratio=0.1)
+    assert _layer_shapes(policy.mlp_extractor.actor) == [
+        (96, 3),
+        (96, 32),
+        (64, 99),
+        (64, 64),
+        (3, 64),
+    ]
     assert policy.lr_critic_ratio == 0.1
     assert isinstance(policy.optimizer, th.optim.Adam)
-    assert [g["lr"] for g in policy.optimizer.param_groups] == pytest.approx([6.0e-6, 6.0e-7])
+    assert [g["lr"] for g in policy.optimizer.param_groups] == pytest.approx(
+        [6.0e-6, 6.0e-7]
+    )
     assert policy.optimizer.defaults["lr"] == 6.0e-6
 
 
@@ -120,7 +155,7 @@ def test_policy_kwargs_survive_sb3_ckpt_roundtrip(tmp_path: Path) -> None:
             n_steps=50,
             batch_size=50 * 11,
             learning_rate=6.0e-6,
-            policy_kwargs={"net_layers": (287, 64, 64), "lr_critic_ratio": 0.1},
+            policy_kwargs={"net_layers": (99, 64, 64), "lr_critic_ratio": 0.1},
             seed=0,
             device="cpu",
         )
@@ -128,21 +163,31 @@ def test_policy_kwargs_survive_sb3_ckpt_roundtrip(tmp_path: Path) -> None:
         model.save(path)
         reloaded = PPO.load(path, device="cpu")
         assert isinstance(reloaded.policy, ActorCriticPolicy)
-        assert _layer_shapes(reloaded.policy.mlp_extractor.actor) == [(64, 287), (64, 64), (3, 64)]
+        assert _layer_shapes(reloaded.policy.mlp_extractor.actor) == [
+            (96, 3),
+            (96, 32),
+            (64, 99),
+            (64, 64),
+            (3, 64),
+        ]
         assert reloaded.policy.lr_critic_ratio == 0.1
-        assert tuple(reloaded.policy_kwargs["net_layers"]) == (287, 64, 64)
+        assert tuple(reloaded.policy_kwargs["net_layers"]) == (99, 64, 64)
     finally:
         vec.close()
 
 
-def test_build_model_default_config_bit_identical_to_direct_construction(tmp_path: Path) -> None:
+def test_build_model_default_config_bit_identical_to_direct_construction(
+    tmp_path: Path,
+) -> None:
     """Given default config（无覆盖）；When _build_model 与等参直接 PPO 构造（无
     policy_kwargs 的旧口径）；Then 两者 policy state_dict 逐位相等——缝的硬约束：
     默认路径架构/优化器/RNG 消耗逐位不变（policy_kwargs 恒注入不改变行为）。"""
     cfg = load_config()
     vec_a, vec_b = _vec(), _vec()
     try:
-        via_runner = _build_model(vec_a, _spec(cfg, out_root=tmp_path), tmp_path / "ckpts")
+        via_runner = _build_model(
+            vec_a, _spec(cfg, out_root=tmp_path), tmp_path / "ckpts"
+        )
         ppo_cfg = cfg["ppo"]
         direct = PPO(
             policy=ActorCriticPolicy,
@@ -161,7 +206,9 @@ def test_build_model_default_config_bit_identical_to_direct_construction(tmp_pat
             device="cpu",
         )
         for (ka, va), (kb, vb) in zip(
-            via_runner.policy.state_dict().items(), direct.policy.state_dict().items(), strict=True
+            via_runner.policy.state_dict().items(),
+            direct.policy.state_dict().items(),
+            strict=True,
         ):
             assert ka == kb
             assert th.equal(va, vb)
@@ -171,55 +218,80 @@ def test_build_model_default_config_bit_identical_to_direct_construction(tmp_pat
 
 
 def test_net_layers_input_dim_validation() -> None:
-    """Given 输入维与观测不符的 net_layers=(999,64)；When 构造 policy；Then
-    ValueError（注入路径与 config 回落路径同一校验口径）。"""
+    """Given MLP 输入维与 FeatureExtractor 输出不符的 net_layers=(999,64)；When
+    构造 policy；Then ValueError（GRU 版首元素是 MLP 输入维 99，注入路径与
+    config 回落路径同一校验口径）。"""
     with pytest.raises(ValueError, match="999"):
         _policy(net_layers=(999, 64))
 
 
 def test_apply_freeze_uses_injected_freeze_cfg() -> None:
-    """Given 显式 freeze_cfg（只冻 actor.1、不重置头）；When apply_freeze(freeze_cfg=...)；
-    Then 仅 actor[1] requires_grad=False、头与 critic 可训练且头参数逐位不变
-    （不读全局 default.yaml 的 [actor.0-3]+reinit_head=true）。"""
+    """Given 显式 freeze_cfg（只冻 actor.1.2、不重置头）；When
+    apply_freeze(freeze_cfg=...)；Then 仅 actor[1][2] requires_grad=False、
+    其余（FeatureExtractor/actor[1] 其余位/头/critic）可训练且头参数逐位不变
+    （不读全局 default.yaml 的 [actor.1.0-3]+reinit_head=true）。"""
     policy = _policy()
-    head_before = {n: p.detach().clone() for n, p in policy.named_parameters() if n.startswith("mlp_extractor.actor.4.")}
+    head_before = {
+        n: p.detach().clone()
+        for n, p in policy.named_parameters()
+        if n.startswith(HEAD_PREFIX)
+    }
     apply_freeze(
         policy,
-        freeze_cfg={"frozen_layers": ["actor.1"], "reinit_head": False, "critic_trainable": True},
+        freeze_cfg={
+            "frozen_layers": ["actor.1.2"],
+            "reinit_head": False,
+            "critic_trainable": True,
+        },
     )
     actor = policy.mlp_extractor.actor
-    assert all(not p.requires_grad for p in actor[1].parameters())
-    for idx in (0, 2, 4):
-        assert all(p.requires_grad for p in actor[idx].parameters())
+    mlp = _mlp(actor)
+    assert all(not p.requires_grad for p in mlp[2].parameters())
+    for idx in (0, 1, 3, 4):
+        assert all(p.requires_grad for p in mlp[idx].parameters())
+    assert all(
+        p.requires_grad for p in actor[0].parameters()
+    )  # FeatureExtractor 不冻结
     assert all(p.requires_grad for p in policy.mlp_extractor.critic.parameters())
     for name, param in policy.named_parameters():
-        if name.startswith("mlp_extractor.actor.4."):
+        if name.startswith(HEAD_PREFIX):
             assert th.equal(head_before[name], param.detach())
 
 
 def test_apply_freeze_no_cfg_falls_back_to_default_config() -> None:
     """Given 不传 freeze_cfg；When apply_freeze()；Then 读 default.yaml freeze 节
-    （actor.0-3 全冻结，回落表征：既有调用方/测试口径不变）。"""
+    （actor.1.0-3 MLP 躯干冻结、FeatureExtractor 与头可训练，回落表征：
+    既有调用方/测试口径不变）。"""
     policy = _policy()
     apply_freeze(policy)
     actor = policy.mlp_extractor.actor
+    mlp = _mlp(actor)
     for idx in (0, 1, 2, 3):
-        assert all(not p.requires_grad for p in actor[idx].parameters())
-    assert all(p.requires_grad for p in actor[-1].parameters())
+        assert all(not p.requires_grad for p in mlp[idx].parameters())
+    assert all(
+        p.requires_grad for p in actor[0].parameters()
+    )  # GRU FeatureExtractor 可训练
+    assert all(p.requires_grad for p in mlp[4].parameters())  # 头可训练
     assert all(p.requires_grad for p in policy.mlp_extractor.critic.parameters())
 
 
 def test_build_model_applies_injected_freeze_cfg(tmp_path: Path) -> None:
-    """Given freeze 节覆盖为只冻 actor.1 的注入 config + freeze 臂；When
+    """Given freeze 节覆盖为只冻 actor.1.2 的注入 config + freeze 臂；When
     _build_model；Then 冻结模式来自注入 cfg 而非全局 default.yaml（修前 RED：
-    apply_freeze 读全局，注入被静默忽略，actor.0 也会被冻结）。"""
-    cfg = merge(load_config(), {"freeze": {"frozen_layers": ["actor.1"], "reinit_head": False}})
+    apply_freeze 读全局，注入被静默忽略，actor.1.0 也会被冻结）。"""
+    cfg = merge(
+        load_config(),
+        {"freeze": {"frozen_layers": ["actor.1.2"], "reinit_head": False}},
+    )
     vec = _vec()
     try:
-        model = _build_model(vec, _spec(cfg, freeze=True, out_root=tmp_path), tmp_path / "ckpts")
+        model = _build_model(
+            vec, _spec(cfg, freeze=True, out_root=tmp_path), tmp_path / "ckpts"
+        )
         assert isinstance(model.policy, ActorCriticPolicy)
         actor = model.policy.mlp_extractor.actor
-        assert all(not p.requires_grad for p in actor[1].parameters())
-        assert all(p.requires_grad for p in actor[0].parameters())
+        mlp = _mlp(actor)
+        assert all(not p.requires_grad for p in mlp[2].parameters())
+        assert all(p.requires_grad for p in mlp[0].parameters())
     finally:
         vec.close()

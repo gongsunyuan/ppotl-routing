@@ -23,8 +23,13 @@ def ospf_policy(obs_batch: npt.NDArray[np.float64]) -> npt.NDArray[np.int64]:
 
 
 def run_ospf_eval(
-    topo: str, rate: int, out_root: str | Path | None = None, config: dict[str, Any] | None = None
+    topo: str,
+    rate: int,
+    out_root: str | Path | None = None,
+    config: dict[str, Any] | None = None,
 ) -> Path:
     """OSPF eval-only run（arm="OSPF", seed=0），返回 run 目录。"""
     cfg = load_config() if config is None else config
-    return run_eval_only("OSPF", topo, rate, policy_fn=ospf_policy, seed=0, out_root=out_root, config=cfg)
+    return run_eval_only(
+        "OSPF", topo, rate, policy_fn=ospf_policy, seed=0, out_root=out_root, config=cfg
+    )

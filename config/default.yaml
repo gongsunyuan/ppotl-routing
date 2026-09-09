@@ -5,7 +5,7 @@
 paper_defaults:
   env:
     K: 3                    # 候选路径数；每步每节点 one-hot 选一（F1）
-    max_nodes: 41           # 观测固定 7*41=287 维零填充；41=CERNET 节点数（F8/D1）
+    max_nodes: 41           # 观测固定上限节点数（ckpt 跨拓扑形状兼容的根基；41=全集最大 CERNET，F8/D1）
     capacity: 10000         # M/M/1/K 排队的 K（F11/§3）
     mu: [1000, 2000, 3000]  # 链路服务率集合 μ（F11）
     alpha_plr: 0.7          # packetloss 权重，对齐论文 ζ2=0.7；legacy gen.py a=3 差异记 DEVIATIONS #9（§3/D8）
@@ -18,22 +18,22 @@ paper_defaults:
     #   norm = node_num * capacity / avgrate / 2000
   ppo:
     n_steps: 50             # rollout 长度 = 回合步数（D2）
-    n_epochs: 10            # K_epochs（F13）
+    n_epochs: 15            # ⬆️ 方案A：10→15 (+50%) 更充分学习每批数据
     batch_size: null        # = 50·N 整批；由 runner 按拓扑节点数计算（D2）
     gamma: 0.99             # 论文值；legacy 因 F5 bug 从未生效，本实现经 truncated bootstrap 真正生效（DEVIATIONS #1）
     gae_lambda: 1.0         # =MC 回报优势，最贴 legacy（D2）
     clip_range: 0.2         # eps_clip（F13）
-    ent_coef: 0.05          # 实际步进的熵系数；legacy main.py:257 的 0.01 是死变量（F12）
-    learning_rate: 6.0e-6   # 单 Adam lr；弃 legacy 双 lr（10x）与 actor wd=1e-4（D3/DEVIATIONS #3）
+    ent_coef: 0.1           # ⬆️ 方案A：0.05→0.1 (×2) 增加探索（高负载需要更多探索）
+    learning_rate: 1.0e-5   # ⬆️ 方案A：6e-6→1e-5 (+67%) 加速学习
     lr_critic_ratio: null   # 缝 3 双 lr 开关：null=单 Adam（D3 现状，逐位同旧行为）；float r=双参数组 Adam，critic 组 lr=actor 组 × r；0.1 复刻 legacy actor/critic=10x（actor 6e-6/critic 6e-7，DEVIATIONS #3）
     normalize_advantage: true  # D2
   net:
-    layers: [287, 128, 64]  # actor/critic 躯干隐层；输入 7*41=287，输出头 Linear(64,3)（F2/D3）
+    layers: [99, 128, 64]  # actor/critic MLP隐层；输入99维(GRU路径池化: 3自身+96路径表示)，输出头 Linear(64,3)（GRU版本2026-09-02）
     activation: PReLU       # F2
     init: kaiming_normal_   # fan_out 模式、nonlinearity=relu（F2/D3）
     separate_pi_vf: true    # pi/vf 完全独立两网，不用 SB3 默认 MlpExtractor（D3）
   freeze:                   # arm3/6 冻结语义（D4；按 F7 死注释意图新定义，legacy 从未运行过部分冻结）
-    frozen_layers: [actor.0, actor.1, actor.2, actor.3]  # 躯干冻结清单：Linear(287,128)、两 PReLU、Linear(128,64)（D4/F7：除输出头外全冻结）
+    frozen_layers: [actor.1.0, actor.1.1, actor.1.2, actor.1.3]  # MLP躯干冻结清单：Linear(99,128)、两 PReLU、Linear(128,64)（GRU版本：actor.0是FeatureExtractor，actor.1是MLP）
     reinit_head: true       # 输出头 Linear(64,3) 先 kaiming 重初始化再可训练（F7）
     critic_trainable: true  # critic 全部可训练（F7）
   eval:
@@ -47,14 +47,15 @@ paper_defaults:
   adapt:
     episodes: 1000          # 微调回合数（§5 主表适应预算；M3 校准，勿逐臂重调）
   pretrain:
-    topology: CERNET.gml    # 预训练源拓扑（41 节点，F8/F9/D5）
-    avgrate: 500            # 源域平均速率（§5 主表）
-    episodes: 8000          # ≈legacy 等效回合数；M0 实测单步成本后校准（§5）
-  scenarios:                # 目标场景 4 条（§5：F9 两轴 + 流量变化轴）
-    - {topo: CERNET_failure.gml, avgrate: 500}  # ① 同拓扑链路故障
-    - {topo: Abilene.gml, avgrate: 500}         # ② 跨拓扑 11 节点
-    - {topo: NFSCNET.gml, avgrate: 500}         # ③ 跨拓扑 9 节点（图上标签沿用论文拼写 NSFCNET）
-    - {topo: CERNET.gml, avgrate: 1500}         # ④ 流量倍增（新增强化"动态流量"主张）
+    topology: Claranet.gml    # 预训练源拓扑（2026-09-09 D6 裁决正式立项：CERNET→Claranet 源域切换，DEVIATIONS #17；
+                              # 优化轮考场排序 CERNET 全负载轴区分度 ≤0.073 封闭、Claranet@500 RL 胜 OSPF +0.74%）
+    avgrate: 500              # 源域平均速率（§5 主表；@300 轻载不适配已裁决不进主表，D8 2026-09-09）
+    episodes: 15000           # 方案 A 定案预算（DEVIATIONS #16：8000→15000）
+  scenarios:                # 目标场景 4 条（D6 裁决 2026-09-09：源切换后场景随源重定义）
+    - {topo: Claranet_failure.gml, avgrate: 500}  # ① 同拓扑链路故障（原 CERNET_failure 随源切换）
+    - {topo: Abilene.gml, avgrate: 500}           # ② 跨拓扑 11 节点
+    - {topo: NFSCNET.gml, avgrate: 500}           # ③ 跨拓扑 9 节点（图上标签沿用论文拼写 NSFCNET）
+    - {topo: Claranet.gml, avgrate: 1500}         # ④ 同源拓扑流量倍增（原 CERNET@1500 随源切换）
   seeds: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]  # 配对设计 10 种子占位；M3 功效校验后或上调（§5）
   paths:                    # 产物目录（M2-3 runner；resolve_path 锚定 experiments/ 包根，与 cwd 无关）
     runs_dir: runs          # 每 run 一个子目录：metrics.csv/eval.json/manifest.json/DONE|FAILED（§6 产物契约）

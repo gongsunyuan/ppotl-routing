@@ -275,3 +275,57 @@ experiments/                      # 原 .venv 与旧代码已在 M-1 清空
 - [x] F1. 语义忠实性审查：实现逐条对照 F1–F13 + DEVIATIONS.md 十条完整 + 对 legacy 与论文的双向诚实记录 ✅ 2026-08-26 VERDICT: APPROVE（oracle ses_fc12cae7cffeSISPp15GBXSZLX：F1-F13 逐条核验忠实；6 条 quirk 全部回 legacy 源码属实；zip/k_paths 数学复核成立；0 BLOCKER，2 MINOR 已落档）
 - [x] F2. 工程质量审查：pytest 全绿（7 组测试）、确定性 run_id、产物契约完备、sweep 幂等/断点续跑 ✅ 2026-08-26 VERDICT: APPROVE（oracle ses_fc12c998effeqDy05s22bGFdmX：155 passed；run_id 确定性实测；契约+截断修复实证；dry-run 374/34 自洽；依赖全 ==；0 BLOCKER）
 - [x] F3. 科学协议审查：预注册指标按章执行、配对统计正确、图表可复现、lineage 完整、结论与数据一致 ✅ 2026-08-26 VERDICT: APPROVE（oracle ses_fc12c8153ffezhufuGLjNGXZzG：tex:475 归一化逐字核对；Holm 手算验证；lineage 15 行零失配；冒烟结论克制；悬项全记录；0 BLOCKER）
+
+---
+
+## 13. 剩余计划（承接 `.omo/plans/experiment-execution-plan.md`，2026-09-08 转录）
+
+> 源计划状态：Phase-0/1/2 完成（Phase-1 stop-rule 保留论文默认；Phase-2 冻结门通过）；
+> Phase-3 执行至 A6 先行波触发差距门（Abilene@500 0.5574 < 0.7351；NFSCNET@500
+> 0.5810 < 0.6979；崩溃种子集 {2,4,9} 跨场景重合），用户裁决"优化优先（C 变体）"。
+> **优化轮已改变方法本体**：GRU 路径特征（78 维观测）+ 方案 A 超参（lr=1e-5,
+> ent=0.1, epochs=15, 15000ep）+ 源域切换 CERNET@500→Claranet@500（DEVIATIONS
+> #14-16）。源计划的预构建网格按旧协议生成，重启前须作废重生成。
+
+### 13.1 当前基线快照（2026-09-08）
+- 源域：Claranet@500 × 3 种子 DONE（RL 0.6403 vs OSPF 0.6357 = +0.74%）
+- 已完成：Claranet→Abilene 零样本泛化（36 A0 + 8 基线，44/44 DONE）
+- 已知问题：@300 轻载超参不适配（慢性衰退至 -12.7%，已搁置）；21 个 freeze
+  相关测试失败（威胁 A3/A6 臂正确性保障）
+
+### 13.2 剩余计划（按源计划 Phase-3 链条顺序）
+
+**P0 协议修订前置（正式立项门槛，源计划红线要求）**
+- [x] DEVIATIONS 补记：源域切换正式立项 + GRU 特征工程状态更新（#15）✅ 2026-09-09：#17 落档（含 D6/D7/D8 裁决记录）；#14-16 已由优化轮补齐
+- [x] prereg 重定义：保护对象改为 4 目标场景（源计划 §优化轮 明确要求）✅ 2026-09-09：metrics_prereg v4（保护集 = Claranet_failure@500 / Abilene@500 / NFSCNET@500 / Claranet@1500；load_sweep 主拓扑随源切 Claranet.gml；test_tuning_prereg 钉死）
+- [x] θ 回填 metrics_prereg（GATE-2 遗留，θ=null）✅ 实为已关闭：GATE-2 缺省裁决（2026-09-01，v3 留痕）theta=null 即终局口径（逐场景 theta_rule 推导），禁回填全局 float——本项属源计划转录时的过时描述
+- [x] 旧预构建网格作废：config/grid_main_rem_*.yaml + logs/run_remainder.sh
+      （旧 287 维协议产物；run_id 不含特征因素，防新旧 DONE 混淆）✅ 2026-09-09：grid_main_rem_*(8) 删除、grid_main_a6wave + grid_main_pretrain_s0-9（同旧协议）一并 git rm；logs/run_remainder.sh 本机不存在（未随迁移）
+- [x] freeze 测试修复（21 个失败）✅ 2026-09-09：根因 = GRU 重构后层级锚点 actor.1.0 使 freeze._module_at 的 int() 解析崩溃 + 特征测试钉旧 287 维结构；修复 freeze.py 层级解析/头下钻 + nets.MLP_INPUT_DIM 校验恢复 + 7 个测试文件对齐 GRU/方案 A 定案；254 全绿 + basedpyright 0 错误
+
+**P1 A6 先行波重跑（新方法体系，差距门复检）**
+- [ ] 10 预训练（Claranet@500 × seeds 0-9）+ 40 A0 + A6 × 4 场景 × 10 种子
+- [ ] 4 场景 × {OSPF, ECMP, LB, RR} 基线行
+- [ ] 差距门复检（任一场景 A6 均值 < OSPF−0.05 或 4 场景全败 → 暂停汇报）
+      ——验证旧崩溃画像（Abilene 4/10、NFSCNET 3/10）在新特征下是否消失
+
+**P2 主表余量波（差距门通过后）**
+- [ ] 其余 7 臂 × 4 场景 × 10 种子（A1b 范围按 D2=维持 4 场景）
+- [ ] 并发：--filter 多进程（Phase-0 定案）；预训练先行（lineage 守卫）
+- [ ] 叙事增项：基线负载扫、OSPF-agreement 日志、Δ-vs-OSPF 图、泛化差距面板
+
+**P3 统计与出图**
+- [ ] θ/W/k 指标管线全量出数；逐种子配对差（t/Wilcoxon + Holm）
+
+### 13.3 待用户裁决项（✅ 2026-09-09 全部落档）
+- **D6**：✅ 场景随源切换——① Claranet_failure@500（原 CERNET_failure）② Abilene@500
+  ③ NFSCNET@500 ④ Claranet@1500（原 CERNET@1500 流量倍增轴）；default.yaml scenarios
+  节 + metrics_prereg v4 + DEVIATIONS #17 三处一致，test_package contract 钉死
+- **D7**：✅ 6 组拓扑@负载搭配**不并入**主表（探针证据保留 figures_a6wave/，
+  不生成对应网格）
+- **D8**：✅ @300 轻载**不进主表**、维持搁置（lr 调度 per-load 方案仍为未实施设计）
+
+### 13.4 优化轮遗留悬项（不阻塞主表，影响论文口径）
+- lr 调度器（用户搁置 2026-09-08）
+- 最优 checkpoint 保存机制（@300 曲线峰值 0.86-0.90 不可复现）
+- runner loss 曲线记录（论文 Fig3 收敛分析需要）

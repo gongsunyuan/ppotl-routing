@@ -13,7 +13,12 @@ from trl_sb3.env.routing_env import RoutingEnv
 
 
 def build_routing_env(
-    topo: str, avgrate: int, *, pbrs: bool, seed: int, config: dict[str, Any] | None = None
+    topo: str,
+    avgrate: int,
+    *,
+    pbrs: bool,
+    seed: int,
+    config: dict[str, Any] | None = None,
 ) -> RoutingEnv:
     """按 config 构建 RoutingEnv：env 节映射环境参数 + ppo 节 gamma；
     gml = resolve_path(topologies/<topo>)；未列参数用 RoutingEnv 默认（legacy 常数）。"""

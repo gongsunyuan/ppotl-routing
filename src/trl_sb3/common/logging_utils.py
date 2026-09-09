@@ -46,7 +46,9 @@ def make_run_id(slug: str | None = None, **factors: Any) -> str:
     """
     if not factors:
         raise ValueError("make_run_id requires at least one factor")
-    canonical = "|".join(f"{key}={_canon(value)}" for key, value in sorted(factors.items()))
+    canonical = "|".join(
+        f"{key}={_canon(value)}" for key, value in sorted(factors.items())
+    )
     hash10 = hashlib.sha1(canonical.encode("utf-8")).hexdigest()[:10]
     if slug is None:
         slug = _canon(factors[min(factors)])

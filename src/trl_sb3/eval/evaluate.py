@@ -152,7 +152,11 @@ def run_eval_only(
         freeze=False,
         pretrain=extra.get("pretrain"),
     )
-    root = Path(out_root) if out_root is not None else resolve_path(cfg["paths"]["runs_dir"])
+    root = (
+        Path(out_root)
+        if out_root is not None
+        else resolve_path(cfg["paths"]["runs_dir"])
+    )
     directory = run_dir(root, run_id)
     if is_done(directory):
         return directory
@@ -161,7 +165,10 @@ def run_eval_only(
         with MetricsCSVWriter(directory / "metrics.csv", METRICS_COLUMNS) as writer:
             for ep_idx, episode in enumerate(result["episodes"]):
                 write_eval_rows(writer, arm, topo, int(rate), seed, ep_idx, episode)
-        eval_payload: dict[str, Any] = {"curve": [], "final": {key: result[key] for key in EVAL_AGG_KEYS}}
+        eval_payload: dict[str, Any] = {
+            "curve": [],
+            "final": {key: result[key] for key in EVAL_AGG_KEYS},
+        }
         if "ospf_agreement" in result:  # 叙事增项缝：仅 ON 时附加（OFF 字节同旧）
             eval_payload["ospf_agreement"] = result["ospf_agreement"]
         write_manifest(directory / "eval.json", eval_payload)
@@ -171,7 +178,11 @@ def run_eval_only(
             topo,
             int(rate),
             seed,
-            factors={"pretrain": extra.get("pretrain") is not None, "freeze": False, "pbrs": False},
+            factors={
+                "pretrain": extra.get("pretrain") is not None,
+                "freeze": False,
+                "pbrs": False,
+            },
             source_run_id=extra.get("pretrain"),
             episodes=int(cfg["eval"]["eval_episodes"]),
             device="cpu",

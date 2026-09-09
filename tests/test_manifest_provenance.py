@@ -28,7 +28,9 @@ def _cfg(**overlay: Any) -> dict[str, Any]:
 
 def _expected_hash(sections: dict[str, Any]) -> str:
     """独立复算文档化规范：canonical JSON → sha256 全 hex。"""
-    canonical = json.dumps(sections, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    canonical = json.dumps(
+        sections, sort_keys=True, separators=(",", ":"), ensure_ascii=False
+    )
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
@@ -79,7 +81,9 @@ def test_config_hash_insensitive_to_budget_and_paths() -> None:
 def test_config_hash_omits_absent_sections() -> None:
     """Given 缺 net 节的部分 config；When 哈希；Then 只哈希在场节（key-set 演化容忍）。"""
     partial = {"ppo": _cfg()["ppo"], "eval": _cfg()["eval"]}
-    assert config_hash(partial) == _expected_hash({"ppo": partial["ppo"], "eval": partial["eval"]})
+    assert config_hash(partial) == _expected_hash(
+        {"ppo": partial["ppo"], "eval": partial["eval"]}
+    )
 
 
 # ---- git_state：仓库内取值 / 仓库外降级 ----
@@ -97,7 +101,9 @@ def test_git_state_degrades_to_none_outside_repo(tmp_path: Path) -> None:
     assert git_state(tmp_path) == (None, None)
 
 
-def test_git_state_tolerates_missing_git_binary(monkeypatch: Any, tmp_path: Path) -> None:
+def test_git_state_tolerates_missing_git_binary(
+    monkeypatch: Any, tmp_path: Path
+) -> None:
     """Given git 二进制不可用（OSError）；When git_state；Then (None, None) 不抛。"""
 
     def _no_git(*_args: Any, **_kwargs: Any) -> Any:
@@ -115,13 +121,22 @@ def test_build_manifest_carries_provenance_fields() -> None:
     config_hash() 一致）、git_commit/git_dirty（本仓库内 40-hex / bool）。"""
     cfg = _cfg()
     manifest = build_manifest(
-        run_id="A6-deadbeef00", arm="A6", topo="CERNET.gml", rate=500, seed=3,
-        factors={"pbrs": True, "freeze": True}, source_run_id=None, episodes=1000,
-        device="cpu", config=cfg,
+        run_id="A6-deadbeef00",
+        arm="A6",
+        topo="CERNET.gml",
+        rate=500,
+        seed=3,
+        factors={"pbrs": True, "freeze": True},
+        source_run_id=None,
+        episodes=1000,
+        device="cpu",
+        config=cfg,
     )
     assert manifest["config_hash"] == config_hash(cfg)
     assert re.fullmatch(r"[0-9a-f]{64}", manifest["config_hash"])
-    assert manifest["git_commit"] is None or re.fullmatch(r"[0-9a-f]{40}", manifest["git_commit"])
+    assert manifest["git_commit"] is None or re.fullmatch(
+        r"[0-9a-f]{40}", manifest["git_commit"]
+    )
     assert manifest["git_dirty"] is None or isinstance(manifest["git_dirty"], bool)
 
 
@@ -129,10 +144,32 @@ def test_build_manifest_legacy_fields_untouched() -> None:
     """Given 旧字段；When build_manifest；Then 原键原样保留（additive-only，
     runs/ 里 4 条基线 manifest 的消费端契约不破）。"""
     manifest = build_manifest(
-        run_id="r", arm="A1", topo="Abilene.gml", rate=500, seed=0,
-        factors={}, source_run_id=None, episodes=1, device="cpu", config=_cfg(),
+        run_id="r",
+        arm="A1",
+        topo="Abilene.gml",
+        rate=500,
+        seed=0,
+        factors={},
+        source_run_id=None,
+        episodes=1,
+        device="cpu",
+        config=_cfg(),
     )
-    for key in ("run_id", "arm", "topo", "rate", "seed", "factors", "source_run_id",
-                "episodes", "device", "config", "requirements_lock", "git_hash",
-                "git_hash_note", "versions", "created_at"):
+    for key in (
+        "run_id",
+        "arm",
+        "topo",
+        "rate",
+        "seed",
+        "factors",
+        "source_run_id",
+        "episodes",
+        "device",
+        "config",
+        "requirements_lock",
+        "git_hash",
+        "git_hash_note",
+        "versions",
+        "created_at",
+    ):
         assert key in manifest

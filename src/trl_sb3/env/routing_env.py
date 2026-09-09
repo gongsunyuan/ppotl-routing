@@ -92,15 +92,21 @@ class RoutingEnv(gym.Env[npt.NDArray[np.float64], np.int64]):
         self._change_flow_by_ep: tuple[tuple[int, float], ...] = change_flow_by_ep
         self._avgrate: float = float(avgrate)
         self._max_nodes: int = max_nodes
-        self._rng: np.random.Generator = np.random.default_rng(seed)  # 单流 rng，不碰全局
+        self._rng: np.random.Generator = np.random.default_rng(
+            seed
+        )  # 单流 rng，不碰全局
         self._graph: _DiGraph = load_topology(gml_path)
         self._n: int = self._graph.number_of_nodes()
         self._max_hop: int = nx.diameter(self._graph)
-        self._mu: npt.NDArray[np.int64] = self._rng.choice(mu_choices, size=self._n)  # ① init 一次性，此后图静态
+        self._mu: npt.NDArray[np.int64] = self._rng.choice(
+            mu_choices, size=self._n
+        )  # ① init 一次性，此后图静态
         lcm = math.lcm(*mu_choices)
         for u, v in self._graph.edges:
             self._graph[u][v]["weight"] = lcm // int(self._mu[v])  # 覆盖矩阵残留值
-        self._neighbors: list[list[int]] = [sorted(self._graph.neighbors(i)) for i in range(self._n)]
+        self._neighbors: list[list[int]] = [
+            sorted(self._graph.neighbors(i)) for i in range(self._n)
+        ]
         base_rate = int(avgrate)
         self._candidate_rates: npt.NDArray[np.int64] = np.array(
             [base_rate, base_rate + zip_interval, base_rate - zip_interval]
@@ -112,13 +118,17 @@ class RoutingEnv(gym.Env[npt.NDArray[np.float64], np.int64]):
             while dst == i:
                 dst = int(self._rng.integers(0, self._n))
             self._dst[i] = dst
-            self._rate_init[i] = int(self._rng.choice(self._candidate_rates, p=list(ZIP_PROB)))
+            self._rate_init[i] = int(
+                self._rng.choice(self._candidate_rates, p=list(ZIP_PROB))
+            )
         # 基类 gym.Env 已声明 Space[ObsType]/Space[ActType]——按基类口径注解（覆写
         # 兼容），具体 Box/Discrete 由消费方 isinstance 收窄（policy.py:173 同法）。
-        self.observation_space: gym.spaces.Space[npt.NDArray[np.float64]] = gym.spaces.Box(
-            -np.inf, np.inf, (7 * max_nodes,), dtype=np.float64
+        self.observation_space: gym.spaces.Space[npt.NDArray[np.float64]] = (
+            gym.spaces.Box(-np.inf, np.inf, (78,), dtype=np.float64)
         )
-        self.action_space: gym.spaces.Space[np.int64] = gym.spaces.Discrete(n_candidates)
+        self.action_space: gym.spaces.Space[np.int64] = gym.spaces.Discrete(
+            n_candidates
+        )
         self._t: int = 0
         self._episode: int = 0
         self._rates: npt.NDArray[np.float64] = np.zeros(self._n)
@@ -141,7 +151,9 @@ class RoutingEnv(gym.Env[npt.NDArray[np.float64], np.int64]):
         """_flow_paths 的非 None 视图：k_paths 在首次 reset() 惰性初始化（docstring 见 reset），
         本方法及全部消费方（step 链/启发式 seam）只在 reset 之后调用——gym 契约保证。"""
         flow_paths = self._flow_paths
-        assert flow_paths is not None, "step 链只能在 reset() 之后调用（k_paths 惰性初始化）"
+        assert flow_paths is not None, (
+            "step 链只能在 reset() 之后调用（k_paths 惰性初始化）"
+        )
         return flow_paths
 
     @override
@@ -166,7 +178,9 @@ class RoutingEnv(gym.Env[npt.NDArray[np.float64], np.int64]):
             mean + self._rate_noise_clip,
         )
         if self._flow_paths is None:
-            self._flow_paths = [self._paths_for(i, int(self._dst[i])) for i in range(self._n)]
+            self._flow_paths = [
+                self._paths_for(i, int(self._dst[i])) for i in range(self._n)
+            ]
         info: dict[str, Any] = {
             "rd": np.zeros(self._n),
             "rp": np.zeros(self._n),
@@ -177,22 +191,55 @@ class RoutingEnv(gym.Env[npt.NDArray[np.float64], np.int64]):
         }
         return self._build_state(), info
 
+    def _extract_path_sequence(
+        self, path: list[int], max_len: int = 8
+    ) -> npt.NDArray[np.float64]:
+        """提取路径节点序列特征: (max_len, 3)维，padding为0。
+
+        每个节点3维特征: [rate/avgrate, last_rd, last_rp]
+        不足max_len的用0填充（GRU会通过mask忽略padding）
+        """
+        seq = np.zeros((max_len, 3))
+        for i, node in enumerate(path[:max_len]):
+            seq[i, 0] = self._rates[node] / self._avgrate
+            seq[i, 1] = self._last_rd[node]
+            seq[i, 2] = self._last_rp[node]
+        return seq.flatten()  # 展平为(max_len*3,)向量
+
     def _build_state(self) -> npt.NDArray[np.float64]:
-        """(N, 7*max_nodes) 观测（legacy routingEnv.py:372-423）：own 7 维+邻居升序+零填。"""
+        """(N, 78) 观测: 3维自身基础 + 72维路径序列(3路径×8节点×3特征) + 3维路径长度。
+
+        GRU路径池化版本:
+        - 自身基础(3维): rate/avgrate, last_rd, last_rp
+        - 路径节点序列(72维): 3条路径 × 8节点 × 3特征（展平存储）
+        - 路径长度(3维): 每条路径的实际节点数（GRU需要知道有效长度）
+
+        路径序列保留完整的节点级信息，由策略网络的GRU模块池化。
+        """
         flow_paths = self._paths()
-        feats = np.zeros((self._n, 7))
+        state = np.zeros((self._n, 78))
+        max_path_len = 8
+
         for i in range(self._n):
-            paths = flow_paths[i]
-            feats[i, 0] = round(self._dst[i] / self._n, 2)  # Python round（银行家舍入）
-            feats[i, 1] = round(self._rates[i] / self._avgrate, 2)
-            for j in range(3):
-                feats[i, 2 + j] = len(paths[j]) / self._max_hop if j < len(paths) else 0.0
-            feats[i, 5] = self._last_rd[i]
-            feats[i, 6] = self._last_rp[i]
-        state = np.zeros((self._n, 7 * self._max_nodes))
-        for v in range(self._n):
-            for slot, node in enumerate((v, *self._neighbors[v])):
-                state[v, 7 * slot : 7 * slot + 7] = feats[node]
+            offset = 0
+
+            # 自身基础特征(3维)
+            state[i, 0] = self._rates[i] / self._avgrate
+            state[i, 1] = self._last_rd[i]
+            state[i, 2] = self._last_rp[i]
+            offset = 3
+
+            # 路径节点序列(72维: 3路径×8节点×3特征)
+            for k, path in enumerate(flow_paths[i]):
+                path_seq = self._extract_path_sequence(path, max_path_len)
+                state[i, offset : offset + max_path_len * 3] = path_seq
+                offset += max_path_len * 3
+            offset = 75
+
+            # 路径长度(3维)
+            for k, path in enumerate(flow_paths[i]):
+                state[i, offset + k] = min(len(path), max_path_len)
+
         return state
 
     @override
@@ -207,7 +254,9 @@ class RoutingEnv(gym.Env[npt.NDArray[np.float64], np.int64]):
         split[np.arange(self._n), actions] = 1.0
         self._add_flows(split)
         reward = self._get_reward(split)
-        th = self._rates / self._th_max_rate  # N§4：先算后存（legacy 别名行为不同，记 issues）
+        th = (
+            self._rates / self._th_max_rate
+        )  # N§4：先算后存（legacy 别名行为不同，记 issues）
         self._change_flows(reward.total)
         obs = self._build_state()
         truncated = self._t == self._episode_steps - 1  # 第 50 步 True
@@ -244,7 +293,9 @@ class RoutingEnv(gym.Env[npt.NDArray[np.float64], np.int64]):
                 entries = in_rate[v]
                 if not entries:
                     continue
-                loss = mmk_loss(sum(entries.values()), float(self._mu[v]), self._capacity)
+                loss = mmk_loss(
+                    sum(entries.values()), float(self._mu[v]), self._capacity
+                )
                 for key, ir in entries.items():
                     out = ir * (1.0 - loss)
                     out_rate[v].setdefault(key, out)
@@ -278,7 +329,9 @@ class RoutingEnv(gym.Env[npt.NDArray[np.float64], np.int64]):
                 sp_delay = 0.0
                 sp_ava = rate_k
                 for p in path:
-                    sp_delay += mmk_delay(sum(self._in_rate[p].values()), mu_src, self._capacity)
+                    sp_delay += mmk_delay(
+                        sum(self._in_rate[p].values()), mu_src, self._capacity
+                    )
                     if p == path[-1]:
                         sp_ava = self._out_rate[p].get(i * self._n_candidates + k, 0.0)
                 path_delay += (rate_k / rate) * sp_delay
@@ -288,7 +341,9 @@ class RoutingEnv(gym.Env[npt.NDArray[np.float64], np.int64]):
             rd_new[i] = r_d
             rp_new[i] = r_p
             g_cur = self._beta_delay * r_d + self._alpha_plr * r_p
-            g_prev = self._beta_delay * self._last_rd[i] + self._alpha_plr * self._last_rp[i]
+            g_prev = (
+                self._beta_delay * self._last_rd[i] + self._alpha_plr * self._last_rp[i]
+            )
             if self._pbrs:
                 local[i] = g_cur + self._gamma * g_cur - g_prev
             else:
@@ -298,12 +353,19 @@ class RoutingEnv(gym.Env[npt.NDArray[np.float64], np.int64]):
         omega = self._rates / self._rates.sum()
         global_term = float((omega * local).sum())
         total = np.array(
-            [round(self._mix_local * loc + self._mix_global * global_term, 2) for loc in local]
+            [
+                round(self._mix_local * loc + self._mix_global * global_term, 2)
+                for loc in local
+            ]
         )
         return _StepReward(local, total, float(total.mean()), rd_new, rp_new)
 
     def _change_flows(self, total: npt.NDArray[np.float64]) -> None:
         """按 total 稳定升序调节半数流速率 ±change_flow_pct（legacy routingEnv.py:466-481）。"""
         for rank, node in enumerate(np.argsort(total, kind="stable")):
-            factor = 1.0 - self._change_flow_pct if rank <= self._n / 2 else 1.0 + self._change_flow_pct
+            factor = (
+                1.0 - self._change_flow_pct
+                if rank <= self._n / 2
+                else 1.0 + self._change_flow_pct
+            )
             self._rates[node] *= factor

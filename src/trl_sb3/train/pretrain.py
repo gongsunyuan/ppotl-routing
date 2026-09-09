@@ -32,7 +32,9 @@ def run_pretrain(
             pbrs=True,
             freeze=False,
             source_run_id=None,
-            episodes=int(pretrain_cfg["episodes"]) if episodes is None else int(episodes),
+            episodes=int(pretrain_cfg["episodes"])
+            if episodes is None
+            else int(episodes),
             out_root=Path(out_root) if out_root is not None else None,
             ckpts_dir=None,
             device=device,

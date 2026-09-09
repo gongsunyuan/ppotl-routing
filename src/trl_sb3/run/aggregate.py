@@ -89,7 +89,9 @@ def derive_theta(records: list[dict[str, Any]], prereg: dict[str, Any]) -> float
     for record in learners:
         _, values = _curve_series(record)
         if len(values) >= 2:
-            arm_asymptotes.setdefault(record["arm"], []).append(asymptote(values, k, strict=False)[0])
+            arm_asymptotes.setdefault(record["arm"], []).append(
+                asymptote(values, k, strict=False)[0]
+            )
     if not arm_asymptotes:  # 学习臂曲线全 <2 点 → 无渐近可估，退化 OSPF 口径
         return max(ospf_scores)
     best = max(mean(vals) for vals in arm_asymptotes.values())
@@ -108,7 +110,9 @@ def _summary(values: list[float]) -> dict[str, Any]:
     return {"mean": center, "ci95": [center - half, center + half]}
 
 
-def compute_table(records: list[dict[str, Any]], prereg: dict[str, Any]) -> list[dict[str, Any]]:
+def compute_table(
+    records: list[dict[str, Any]], prereg: dict[str, Any]
+) -> list[dict[str, Any]]:
     """逐 (arm, topo, rate) 组指标行（计划 §5 三元组 + final 均值）。
 
     学习臂（curve 非空）行：theta + tau{by_seed, n_censored, mean, ci95} +
@@ -121,11 +125,15 @@ def compute_table(records: list[dict[str, Any]], prereg: dict[str, Any]) -> list
     k = int(prereg["asymptote_k"])
     groups: dict[tuple[str, str, int], list[dict[str, Any]]] = {}
     for record in records:
-        groups.setdefault((record["arm"], record["topo"], record["rate"]), []).append(record)
+        groups.setdefault((record["arm"], record["topo"], record["rate"]), []).append(
+            record
+        )
     thetas: dict[tuple[str, int], float | None] = {}
     for topo, rate in sorted({(r["topo"], r["rate"]) for r in records}):
         scene = [r for r in records if r["topo"] == topo and r["rate"] == rate]
-        has_learner = any(r["curve"] and r["arm"] not in NON_SCORING_ARMS for r in scene)
+        has_learner = any(
+            r["curve"] and r["arm"] not in NON_SCORING_ARMS for r in scene
+        )
         thetas[(topo, rate)] = derive_theta(scene, prereg) if has_learner else None
     rows: list[dict[str, Any]] = []
     for (arm, topo, rate), members in sorted(groups.items()):
@@ -158,17 +166,30 @@ def compute_table(records: list[dict[str, Any]], prereg: dict[str, Any]) -> list
             tau, is_censored = time_to_threshold(episodes, values, theta, window)
             tau_by_seed[member["seed"]] = tau
             censored += int(is_censored)
-            if len(values) >= 2:  # strict=False 短曲线降级；<2 点无 CI 可言，该种子不进渐近
+            if (
+                len(values) >= 2
+            ):  # strict=False 短曲线降级；<2 点无 CI 可言，该种子不进渐近
                 asym_by_seed[member["seed"]] = list(asymptote(values, k, strict=False))
         row["theta"] = theta
-        row["tau"] = {"by_seed": tau_by_seed, "n_censored": censored, **_summary(list(tau_by_seed.values()))}
-        auc_by_seed = {
-            member["seed"]: window_auc(*_curve_series(member), window) for member in curves
+        row["tau"] = {
+            "by_seed": tau_by_seed,
+            "n_censored": censored,
+            **_summary(list(tau_by_seed.values())),
         }
-        row["window_auc"] = {"by_seed": auc_by_seed, **_summary(list(auc_by_seed.values()))}
+        auc_by_seed = {
+            member["seed"]: window_auc(*_curve_series(member), window)
+            for member in curves
+        }
+        row["window_auc"] = {
+            "by_seed": auc_by_seed,
+            **_summary(list(auc_by_seed.values())),
+        }
         # 全部种子曲线 <2 点时无渐近可估 → 整键 None（下游勿假设恒有）
         row["asymptote"] = (
-            {"by_seed": asym_by_seed, **_summary([pair[0] for pair in asym_by_seed.values()])}
+            {
+                "by_seed": asym_by_seed,
+                **_summary([pair[0] for pair in asym_by_seed.values()]),
+            }
             if asym_by_seed
             else None
         )
@@ -185,6 +206,7 @@ def paired_arm_diffs(
     mean_diff, cohens_d}。Holm 校正不在单对内做——多臂对比族由调用方收集
     全部配对结果后 holm_family() 统一校正。共享种子 < 2 → ValueError。
     """
+
     def finals(arm: str) -> dict[int, float]:
         return {
             r["seed"]: r["final"]["r_mean_mean"]
@@ -195,7 +217,9 @@ def paired_arm_diffs(
     scores_a, scores_b = finals(arm_a), finals(arm_b)
     seeds = sorted(set(scores_a) & set(scores_b))
     if len(seeds) < 2:
-        raise ValueError(f"配对需 >=2 共享种子：{arm_a} vs {arm_b} @ {topo}/{rate} 只有 {seeds}")
+        raise ValueError(
+            f"配对需 >=2 共享种子：{arm_a} vs {arm_b} @ {topo}/{rate} 只有 {seeds}"
+        )
     values_a = [scores_a[s] for s in seeds]
     values_b = [scores_b[s] for s in seeds]
     return {

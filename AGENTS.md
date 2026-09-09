@@ -58,10 +58,18 @@ investigate any red before proceeding.
 
 - Disable sleep before long runs (admin PowerShell): `powercfg /change standby-timeout-ac 0`.
 - Console CJK garbling is a display issue only; CJK paths resolve fine.
-- OPEN ITEM (see `ISSUES.md`): the not-yet-backfilled `theta` in
-  `config/metrics_prereg.yaml` (Phase-3 GATE-2) — must be adjudicated before building
-  the main table. (Eval-episode dual-track CLOSED 2026-08-30: D1=YES, unified at 10,
-  OSPF row regenerated.)
+- CLOSED (2026-09-01, Phase-3 GATE-2): `theta` in `config/metrics_prereg.yaml` stays
+  `null` as the FINAL preregistered form (per-scenario derivation via `theta_rule`);
+  do NOT backfill a global float. Eval-episode dual-track CLOSED 2026-08-30 (D1=YES,
+  unified at 10, OSPF row regenerated).
+
+## Protocol state (2026-09-09)
+
+Method = GRU path-feature version (78-dim obs, DEVIATIONS #15) + Plan-A hyperparams
+(#16); source domain = Claranet@500 × 15000 episodes (#17, D6/D7/D8 adjudicated);
+prereg = metrics_prereg v4 (protection set: Claranet_failure@500 / Abilene@500 /
+NFSCNET@500 / Claranet@1500). Old 287-dim-protocol prebuilt grids are deleted —
+regenerate grids from `config/default.yaml` only.
 
 ## Baseline rows (pre-completed 2026-08-30)
 

@@ -32,8 +32,24 @@ def _expected_hash(factors: dict[str, str]) -> str:
 
 def test_make_run_id_same_factors_same_id() -> None:
     """Given 因素完全一致；When 两次调用；Then id 相等。"""
-    a = make_run_id(arm="A6", topo="CERNET.gml", rate=500, seed=3, pbrs=True, freeze=True, pretrain="run_ab")
-    b = make_run_id(arm="A6", topo="CERNET.gml", rate=500, seed=3, pbrs=True, freeze=True, pretrain="run_ab")
+    a = make_run_id(
+        arm="A6",
+        topo="CERNET.gml",
+        rate=500,
+        seed=3,
+        pbrs=True,
+        freeze=True,
+        pretrain="run_ab",
+    )
+    b = make_run_id(
+        arm="A6",
+        topo="CERNET.gml",
+        rate=500,
+        seed=3,
+        pbrs=True,
+        freeze=True,
+        pretrain="run_ab",
+    )
     assert a == b
 
 
@@ -47,8 +63,13 @@ def test_make_run_id_key_order_independent() -> None:
 def test_make_run_id_value_change_changes_id() -> None:
     """Given 任一因素值变化；When 调用；Then id 必变。"""
     base: dict[str, Any] = {
-        "arm": "A6", "topo": "CERNET.gml", "rate": 500, "seed": 3,
-        "pbrs": True, "freeze": True, "pretrain": "run_ab",
+        "arm": "A6",
+        "topo": "CERNET.gml",
+        "rate": 500,
+        "seed": 3,
+        "pbrs": True,
+        "freeze": True,
+        "pretrain": "run_ab",
     }
     id_base = make_run_id(**base)
     changes: list[tuple[str, Any]] = [
@@ -80,7 +101,15 @@ def test_make_run_id_matches_documented_spec_no_timestamp() -> None:
 def test_make_run_id_distinct_across_family() -> None:
     """Given 一族因素组合；When 逐一取 id；Then 两两互异（哈希碰撞检查）。"""
     ids = [
-        make_run_id(arm=arm, topo=topo, rate=rate, seed=seed, pbrs=pbrs, freeze=freeze, pretrain=None)
+        make_run_id(
+            arm=arm,
+            topo=topo,
+            rate=rate,
+            seed=seed,
+            pbrs=pbrs,
+            freeze=freeze,
+            pretrain=None,
+        )
         for arm in ("A1", "A6")
         for topo in ("CERNET.gml", "Abilene.gml")
         for rate in (500, 1500)
@@ -134,9 +163,20 @@ def test_metrics_csv_writer_header_and_rows(tmp_path: Path) -> None:
     path = tmp_path / "nested" / "metrics.csv"
     columns = ["arm", "episode", "rd", "rp", "th", "r_mean"]
     with MetricsCSVWriter(path, columns) as w:
-        w.write_row({"arm": "A6", "episode": 0, "rd": 0.5, "rp": 0.9, "th": 1.0, "r_mean": 0.42})
+        w.write_row(
+            {"arm": "A6", "episode": 0, "rd": 0.5, "rp": 0.9, "th": 1.0, "r_mean": 0.42}
+        )
     with MetricsCSVWriter(path, columns) as w:  # 追加打开，不得重复表头
-        w.write_row({"arm": "A6", "episode": 1, "rd": 0.6, "rp": 0.91, "th": 1.1, "r_mean": 0.43})
+        w.write_row(
+            {
+                "arm": "A6",
+                "episode": 1,
+                "rd": 0.6,
+                "rp": 0.91,
+                "th": 1.1,
+                "r_mean": 0.43,
+            }
+        )
     rows = list(csv.DictReader(path.open("r", encoding="utf-8", newline="")))
     assert len(rows) == 2
     assert list(rows[0].keys()) == columns

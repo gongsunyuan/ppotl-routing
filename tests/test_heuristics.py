@@ -101,7 +101,15 @@ def test_rand_rollout_reproducible_and_finite() -> None:
     first = rollout_split_episode(_fresh_env(), rand_split, 50)
     second = rollout_split_episode(_fresh_env(), rand_split, 50)
     assert first == second
-    assert all(np.isfinite(v) for v in (first["r_mean_sum"], first["rd_mean"], first["rp_mean"], first["th_mean"]))
+    assert all(
+        np.isfinite(v)
+        for v in (
+            first["r_mean_sum"],
+            first["rd_mean"],
+            first["rp_mean"],
+            first["th_mean"],
+        )
+    )
 
 
 @pytest.mark.parametrize("arm", ["ECMP", "LB", "RR"])

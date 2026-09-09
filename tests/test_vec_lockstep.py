@@ -21,11 +21,13 @@ from trl_sb3.env.routing_env import RoutingEnv
 SEED = 7
 STEPS = 50
 N = 11  # Abilene 平行边坍缩后节点数（见 test_env_determinism.test_shapes_and_zero_padding）
-OBS_DIM = 7 * 41
+OBS_DIM = 78  # 简化特征版本：3自身+18路径统计
 
 
 def _make_env(seed: int = SEED) -> RoutingEnv:
-    return RoutingEnv(resolve_path("topologies/Abilene.gml"), avgrate=500, pbrs=True, seed=seed)
+    return RoutingEnv(
+        resolve_path("topologies/Abilene.gml"), avgrate=500, pbrs=True, seed=seed
+    )
 
 
 def _make_vec(seed: int = SEED) -> NodeFanVecEnv:
@@ -90,7 +92,9 @@ def test_terminal_observation_and_auto_reset() -> None:
         assert isinstance(terminal, np.ndarray) and terminal.shape == (OBS_DIM,)
         assert np.array_equal(terminal, final_obs[slot])
         assert info["TimeLimit.truncated"] is True
-    new_episode_obs, _ = ref.reset()  # 裸 env 第二次 reset = 自动 reset 应到达的同 rng 流位置
+    new_episode_obs, _ = (
+        ref.reset()
+    )  # 裸 env 第二次 reset = 自动 reset 应到达的同 rng 流位置
     assert isinstance(obs, np.ndarray)
     assert obs.shape == (N, OBS_DIM)
     assert np.array_equal(obs, new_episode_obs)
@@ -150,7 +154,11 @@ def test_get_attr_env_method_set_attr() -> None:
     assert vec.get_attr("pbrs") == [True] * N
     mu = vec.get_attr("mu")
     assert len(mu) == N and all(np.array_equal(mu[0], m) for m in mu)
-    results = vec.env_method("reset")  # 底层方法返回值（此处为 (obs, info) 元组）复制 N 份
-    assert len(results) == N and all(np.array_equal(results[0][0], r[0]) for r in results)
+    results = vec.env_method(
+        "reset"
+    )  # 底层方法返回值（此处为 (obs, info) 元组）复制 N 份
+    assert len(results) == N and all(
+        np.array_equal(results[0][0], r[0]) for r in results
+    )
     vec.set_attr("_change_flow_pct", 0.02)
     assert vec.get_attr("_change_flow_pct") == [0.02] * N

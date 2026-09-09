@@ -64,7 +64,9 @@ class NodeFanVecEnv(VecEnv):
         if done:
             final_obs = obs
             obs, reset_info = self._env.reset()
-            self.reset_infos: list[dict[str, Any]] = [dict(reset_info) for _ in range(self.num_envs)]
+            self.reset_infos: list[dict[str, Any]] = [
+                dict(reset_info) for _ in range(self.num_envs)
+            ]
         rewards = np.full(self.num_envs, reward, dtype=np.float64)
         dones = np.full(self.num_envs, done, dtype=bool)
         infos: list[dict[str, Any]] = []
@@ -100,13 +102,19 @@ class NodeFanVecEnv(VecEnv):
         return [value for _ in slots]
 
     @override
-    def set_attr(self, attr_name: str, value: Any, indices: VecEnvIndices = None) -> None:
+    def set_attr(
+        self, attr_name: str, value: Any, indices: VecEnvIndices = None
+    ) -> None:
         # 单底层 env：indices 无独立落点，无论指向哪些 slot 都只赋一次
         setattr(self._env, attr_name, value)
 
     @override
     def env_method(
-        self, method_name: str, *method_args: Any, indices: VecEnvIndices = None, **method_kwargs: Any
+        self,
+        method_name: str,
+        *method_args: Any,
+        indices: VecEnvIndices = None,
+        **method_kwargs: Any,
     ) -> list[Any]:
         slots = list(self._get_indices(indices))
         result = self._env.get_wrapper_attr(method_name)(*method_args, **method_kwargs)
@@ -114,7 +122,9 @@ class NodeFanVecEnv(VecEnv):
 
     @override
     def env_is_wrapped(
-        self, wrapper_class: type[gym.Wrapper[Any, Any, Any, Any]], indices: VecEnvIndices = None
+        self,
+        wrapper_class: type[gym.Wrapper[Any, Any, Any, Any]],
+        indices: VecEnvIndices = None,
     ) -> list[bool]:
         # 底层裸 RoutingEnv 无 gymnasium Wrapper，恒 False
         return [False for _ in self._get_indices(indices)]

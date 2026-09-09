@@ -21,6 +21,7 @@ import pytest
 import torch as th
 from stable_baselines3 import PPO
 from stable_baselines3.common.vec_env import VecEnv, VecMonitor
+from test_freeze import _frozen_param_names
 from test_sb3_smoke import N_ABILENE, SEED, STEPS, _make_vec
 
 from trl_sb3.common.config import load_config
@@ -33,7 +34,7 @@ RATIO = 0.1
 CRITIC_LR = 6.0e-7
 REINIT_SEED = 42
 CRITIC_PREFIX = "mlp_extractor.critic."
-HEAD_PREFIX = "mlp_extractor.actor.4."
+HEAD_PREFIX = "mlp_extractor.actor.1.4."  # GRU 版：actor[1]=MLP，头=actor[1][4]
 ACTOR_PREFIX = "mlp_extractor.actor."
 
 
@@ -42,7 +43,12 @@ def _policy_of(cls: type[ActorCriticPolicy], **policy_kwargs: Any) -> ActorCriti
     vec = _make_vec(TOPO, SEED)
     try:
         th.manual_seed(SEED)
-        return cls(vec.observation_space, vec.action_space, lr_schedule=lambda _: LR, **policy_kwargs)
+        return cls(
+            vec.observation_space,
+            vec.action_space,
+            lr_schedule=lambda _: LR,
+            **policy_kwargs,
+        )
     finally:
         vec.close()
 
@@ -71,7 +77,9 @@ def _group_of(policy: ActorCriticPolicy) -> dict[int, int]:
     group_of: dict[int, int] = {}
     for gi, group in enumerate(policy.optimizer.param_groups):
         for p in group["params"]:
-            assert id(p) not in group_of, f"参数跨组重复（组 {group_of.get(id(p))} 与 {gi}）"
+            assert id(p) not in group_of, (
+                f"参数跨组重复（组 {group_of.get(id(p))} 与 {gi}）"
+            )
             group_of[id(p)] = gi
     return group_of
 
@@ -92,9 +100,13 @@ def test_dual_build_two_param_groups() -> None:
     policy = _policy(lr_critic_ratio=RATIO)
     assert isinstance(policy.optimizer, th.optim.Adam)
     assert len(policy.optimizer.param_groups) == 2
-    assert [g["lr"] for g in policy.optimizer.param_groups] == pytest.approx([LR, CRITIC_LR])
+    assert [g["lr"] for g in policy.optimizer.param_groups] == pytest.approx(
+        [LR, CRITIC_LR]
+    )
     group_of = _group_of(policy)
-    assert set(group_of) == {id(p) for _, p in policy.named_parameters()}, "分区须完备覆盖全部参数"
+    assert set(group_of) == {id(p) for _, p in policy.named_parameters()}, (
+        "分区须完备覆盖全部参数"
+    )
     for name, p in policy.named_parameters():
         expected = 1 if name.startswith(CRITIC_PREFIX) else 0
         assert group_of[id(p)] == expected, name
@@ -130,7 +142,9 @@ def test_dual_lr_ckpt_roundtrip_adapt(tmp_path: Path) -> None:
         reloaded = PPO.load(path, env=vec2, device="cpu")
         assert isinstance(reloaded.policy, ActorCriticPolicy)
         assert reloaded.policy.lr_critic_ratio == RATIO
-        assert len(reloaded.policy.optimizer.param_groups) == 2  # _setup_model 按存盘 policy_kwargs 重建
+        assert (
+            len(reloaded.policy.optimizer.param_groups) == 2
+        )  # _setup_model 按存盘 policy_kwargs 重建
         reloaded.learn(total_timesteps=STEPS * N_ABILENE)
         opt = reloaded.policy.optimizer
         assert isinstance(opt, th.optim.Adam)
@@ -145,9 +159,10 @@ def test_dual_lr_ckpt_roundtrip_adapt(tmp_path: Path) -> None:
 
 
 def test_freeze_rebuild_dual_mirror() -> None:
-    """Given 双 lr PPO + 默认冻结（actor.0-3 冻结、头重初始化可训练）；When
-    rebuild_optimizer；Then 仍两组且只含可训练参数：冻结躯干不在任一组、头
-    （actor.4）入 actor 组、critic 全入 critic 组，lr=[6e-6, 6e-7]。"""
+    """Given 双 lr PPO + 默认冻结（actor.1.0-3 MLP 躯干冻结、头重初始化可训练、
+    GRU FeatureExtractor 不冻结）；When rebuild_optimizer；Then 仍两组且只含可训练
+    参数：冻结躯干不在任一组、头（actor[1][4]）与 FeatureExtractor 均入 actor 组、
+    critic 全入 critic 组，lr=[6e-6, 6e-7]。"""
     vec = _make_vec(TOPO, SEED)
     try:
         model = _dual_ppo(vec, ratio=RATIO)
@@ -161,15 +176,17 @@ def test_freeze_rebuild_dual_mirror() -> None:
         assert isinstance(opt, th.optim.Adam)
         assert [g["lr"] for g in opt.param_groups] == pytest.approx([LR, CRITIC_LR])
         group_of = _group_of(policy)
+        frozen = _frozen_param_names(policy)
+        assert not any(n.startswith(HEAD_PREFIX) for n in frozen), (
+            "头不在冻结集（重初始化后可训练）"
+        )
         for name, p in model.policy.named_parameters():
             if name.startswith(CRITIC_PREFIX):
-                assert group_of.get(id(p)) == 1, name
-            elif name.startswith(HEAD_PREFIX):
-                assert group_of.get(id(p)) == 0, name
-            elif name.startswith(ACTOR_PREFIX):
+                assert group_of[id(p)] == 1, name
+            elif name in frozen:
                 assert id(p) not in group_of, f"冻结躯干不得入组：{name}"
             else:
-                raise AssertionError(f"前缀外参数：{name}")
+                assert group_of[id(p)] == 0, name
     finally:
         vec.close()
 

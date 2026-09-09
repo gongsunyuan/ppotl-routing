@@ -26,7 +26,16 @@ from trl_sb3.common.logging_utils import MetricsCSVWriter
 
 # metrics.csv 长表列契约（计划 §6）：rd/rp/th 为 per-node 均值标量。
 METRICS_COLUMNS: tuple[str, ...] = (
-    "arm", "topo", "rate", "seed", "episode", "step", "rd", "rp", "th", "r_mean",
+    "arm",
+    "topo",
+    "rate",
+    "seed",
+    "episode",
+    "step",
+    "rd",
+    "rp",
+    "th",
+    "r_mean",
 )
 
 # config_hash 只取协议承载节（计划 §2 工程缝 4 "paper_defaults+eval 协议哈希"）：
@@ -45,7 +54,9 @@ def config_hash(config: Mapping[str, Any]) -> str:
     键集或键值任一变化 → 哈希必变；pretrain.episodes / paths 变化 → 哈希不变。
     """
     payload = {key: config[key] for key in CONFIG_HASH_SECTIONS if key in config}
-    canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    canonical = json.dumps(
+        payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False
+    )
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
@@ -53,7 +64,11 @@ def _run_git(*args: str) -> str | None:
     """git 子命令输出（成功时 stdout strip）；git 缺失/超时/非零 → None，绝不抛。"""
     try:
         proc = subprocess.run(
-            ["git", *args], capture_output=True, text=True, timeout=10, check=False  # 固定参数调用本机 git
+            ["git", *args],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,  # 固定参数调用本机 git
         )
     except (OSError, subprocess.SubprocessError):
         return None
@@ -83,7 +98,9 @@ def mark_done(run_dir: str | Path) -> None:
 
 def mark_failed(run_dir: str | Path, exc: BaseException) -> None:
     """FAILED 写 traceback 全文（排查依据；与 DONE 互斥）。"""
-    (Path(run_dir) / "FAILED").write_text("".join(traceback.format_exception(exc)), encoding="utf-8")
+    (Path(run_dir) / "FAILED").write_text(
+        "".join(traceback.format_exception(exc)), encoding="utf-8"
+    )
 
 
 def build_manifest(
@@ -117,7 +134,9 @@ def build_manifest(
         "config_hash": config_hash(config),
         "git_commit": commit,
         "git_dirty": dirty,
-        "requirements_lock": (PKG_ROOT / "requirements.lock").read_text(encoding="utf-8"),
+        "requirements_lock": (PKG_ROOT / "requirements.lock").read_text(
+            encoding="utf-8"
+        ),
         "git_hash": None,
         "git_hash_note": "无 git 仓库",
         "versions": {

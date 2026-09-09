@@ -121,7 +121,9 @@ def test_bad_episodes_or_seeds_refused() -> None:
 def test_duplicate_tags_in_one_file_refused() -> None:
     """Given 两 trial 派生同 tag；When load_trials；Then 拒绝（共享 trial_root = 碰撞）。"""
     with pytest.raises(TrialSpecError, match="重复 tag"):
-        load_trials([_trial_dict(), _trial_dict(config_overlay={"ppo": {"ent_coef": 0.01}})])
+        load_trials(
+            [_trial_dict(), _trial_dict(config_overlay={"ppo": {"ent_coef": 0.01}})]
+        )
 
 
 # ---- 网格合成（隔离红线 4）----
@@ -131,16 +133,22 @@ def test_synthesized_grid_redirects_paths_and_forces_isolation(tmp_path: Path) -
     """Given trial + overlay（含恶意 paths 改写企图）；When synthesize_grid；Then
     config_overlay.paths 强制为 trial_root/runs|ckpts（隔离不可协商），trial 级
     seeds/episodes 压过 grid.pretrain，其余 overlay 原样保留。"""
-    trial = _trial(config_overlay={
-        "ppo": {"learning_rate": 2.0e-5, "lr_critic_ratio": 0.1},
-        "paths": {"runs_dir": "/evil/runs"},
-    })
+    trial = _trial(
+        config_overlay={
+            "ppo": {"learning_rate": 2.0e-5, "lr_critic_ratio": 0.1},
+            "paths": {"runs_dir": "/evil/runs"},
+        }
+    )
     root = tmp_path / "runs_tune" / trial.tag
     synth = synthesize_grid(trial, root)
     assert synth["config_overlay"]["paths"] == {
-        "runs_dir": str(root / "runs"), "ckpts_dir": str(root / "ckpts"),
+        "runs_dir": str(root / "runs"),
+        "ckpts_dir": str(root / "ckpts"),
     }
-    assert synth["config_overlay"]["ppo"] == {"learning_rate": 2.0e-5, "lr_critic_ratio": 0.1}
+    assert synth["config_overlay"]["ppo"] == {
+        "learning_rate": 2.0e-5,
+        "lr_critic_ratio": 0.1,
+    }
     assert synth["pretrain"] == {"seeds": [100], "episodes": 2000}
     assert synth["scenarios"] == [SCENARIO] and synth["zeroshot"] is True
 
@@ -153,7 +161,9 @@ def test_synthesis_lands_in_merged_config(tmp_path: Path) -> None:
     cfg = _merged_config(synthesize_grid(trial, root), _base_cfg())
     assert cfg["paths"]["runs_dir"] == str(root / "runs")
     assert cfg["paths"]["ckpts_dir"] == str(root / "ckpts")
-    assert cfg["ppo"]["learning_rate"] == 2.0e-5 and cfg["ppo"]["lr_critic_ratio"] == 0.1
+    assert (
+        cfg["ppo"]["learning_rate"] == 2.0e-5 and cfg["ppo"]["lr_critic_ratio"] == 0.1
+    )
     assert cfg["pretrain"]["episodes"] == 2000
 
 
@@ -177,7 +187,9 @@ def test_guard_refuses_overlay_hash_mismatch(tmp_path: Path) -> None:
     meta["overlay_hash"] = "f" * 64
     _write_meta(root, meta)
     current = _current_meta(tmp_path)
-    with pytest.raises(TrialCollisionError, match=r"overlay_hash.*[0-9a-f]{64}.*[0-9a-f]{64}"):
+    with pytest.raises(
+        TrialCollisionError, match=r"overlay_hash.*[0-9a-f]{64}.*[0-9a-f]{64}"
+    ):
         check_collision(root, current)
 
 
@@ -187,7 +199,11 @@ def test_guard_refuses_git_commit_mismatch(tmp_path: Path) -> None:
     root = tmp_path / "runs_tune" / _trial().tag
     root.mkdir(parents=True)
     meta = _current_meta(tmp_path)
-    meta["git_commit"] = (meta["git_commit"] or "0" * 40)[:39] + "1"
+    cur = meta["git_commit"] or "0" * 40
+    flipped = (
+        cur[-1] if cur[-1] != "1" else "0"
+    )  # 末位确定性翻转（HEAD 以 1 结尾时换 0）
+    meta["git_commit"] = cur[:39] + flipped
     _write_meta(root, meta)
     with pytest.raises(TrialCollisionError, match="git_commit"):
         check_collision(root, _current_meta(tmp_path))
@@ -210,7 +226,9 @@ def test_guard_refuses_config_protocol_drift(tmp_path: Path) -> None:
     root = tmp_path / "runs_tune" / _trial().tag
     root.mkdir(parents=True)
     _write_meta(root, trial_meta(_trial(), _base_cfg()))
-    drifted_cfg = merge(_base_cfg(), {"eval": {"eval_episodes": 5}})  # D1 后缺省 10，漂移到 5
+    drifted_cfg = merge(
+        _base_cfg(), {"eval": {"eval_episodes": 5}}
+    )  # D1 后缺省 10，漂移到 5
     with pytest.raises(TrialCollisionError, match="created_config_hash"):
         check_collision(root, trial_meta(_trial(), drifted_cfg))
 
@@ -226,7 +244,10 @@ def test_guard_skips_on_identity(tmp_path: Path) -> None:
 
 def test_guard_fresh_when_no_dir(tmp_path: Path) -> None:
     """Given trial_root 不存在；When check_collision；Then "fresh"。"""
-    assert check_collision(tmp_path / "runs_tune" / _trial().tag, _current_meta(tmp_path)) == "fresh"
+    assert (
+        check_collision(tmp_path / "runs_tune" / _trial().tag, _current_meta(tmp_path))
+        == "fresh"
+    )
 
 
 def test_guard_refuses_existing_dir_without_meta(tmp_path: Path) -> None:
@@ -261,8 +282,14 @@ def _fake_sweep_side_effect(base: dict[str, Any]) -> Any:
             directory = Path(cfg["paths"]["runs_dir"]) / task_run_id(task)
             directory.mkdir(parents=True, exist_ok=True)
             if task.arm == "A0":
-                write_manifest(directory / "manifest.json", {"arm": "A0", "topo": task.topo, "rate": task.rate})
-                write_manifest(directory / "eval.json", {"curve": [], "final": {"r_mean_mean": 0.625}})
+                write_manifest(
+                    directory / "manifest.json",
+                    {"arm": "A0", "topo": task.topo, "rate": task.rate},
+                )
+                write_manifest(
+                    directory / "eval.json",
+                    {"curve": [], "final": {"r_mean_mean": 0.625}},
+                )
             (directory / "DONE").write_text("", encoding="utf-8")
         return 0
 
@@ -286,7 +313,12 @@ def test_run_tune_executes_summarizes_and_idempotent_skip(
     tune_root = tmp_path / "runs_tune"
     results = run_tune([_trial_dict()], device="cpu", tune_root=tune_root)
     assert len(results) == 1 and results[0].status == "ok"
-    assert (results[0].planned, results[0].done, results[0].skipped, results[0].failed) == (2, 2, 0, 0)
+    assert (
+        results[0].planned,
+        results[0].done,
+        results[0].skipped,
+        results[0].failed,
+    ) == (2, 2, 0, 0)
     assert results[0].dev_rows == (("Abilene.gml", 500, 0.625),)
     trial_root = tune_root / results[0].tag
     assert (trial_root / "trial_meta.json").is_file()
@@ -296,8 +328,17 @@ def test_run_tune_executes_summarizes_and_idempotent_skip(
         rows = list(csv.DictReader(handle))
     assert len(rows) == 1
     row = rows[0]
-    assert row["tag"] == "lr2e-5_dual_a2000" and row["status"] == "ok" and row["exit_code"] == "0"
-    assert (row["planned"], row["done"], row["skipped"], row["failed"]) == ("2", "2", "0", "0")
+    assert (
+        row["tag"] == "lr2e-5_dual_a2000"
+        and row["status"] == "ok"
+        and row["exit_code"] == "0"
+    )
+    assert (row["planned"], row["done"], row["skipped"], row["failed"]) == (
+        "2",
+        "2",
+        "0",
+        "0",
+    )
     assert row["n_a0"] == "1" and row["a0_r_mean_mean"] == "0.625000"
     assert row["dev_detail"] == "Abilene.gml@500=0.625000"
     assert "sweep" in capsys.readouterr().out
@@ -307,7 +348,9 @@ def test_run_tune_executes_summarizes_and_idempotent_skip(
     assert not any(part.startswith("--dry") for part in calls[0])
 
 
-def test_run_tune_records_subprocess_failure(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_run_tune_records_subprocess_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Given 子进程退出码 1（sweep 内部 failed 但 tune 不中断）；When run_tune；
     Then status failed、exit_code 1、counts 全计划未完成。"""
     monkeypatch.setattr(tune_module, "_execute_trial", lambda command: 1)
@@ -322,8 +365,11 @@ def test_dry_run_spawns_no_subprocess_and_creates_nothing(
     """Given dry-run；When run_tune；Then 不 spawn 子进程（spawn 即测试失败）、
     不创建 tune_root 任何目录、不写 summary、stdout 打印计划命令（freeze-gate 式验证）。"""
     monkeypatch.setattr(
-        tune_module, "_execute_trial",
-        lambda command: (_ for _ in ()).throw(AssertionError("dry-run 不得 spawn 子进程")),
+        tune_module,
+        "_execute_trial",
+        lambda command: (_ for _ in ()).throw(
+            AssertionError("dry-run 不得 spawn 子进程")
+        ),
     )
     tune_root = tmp_path / "runs_tune"
     results = run_tune([_trial_dict()], device="cpu", dry_run=True, tune_root=tune_root)
@@ -342,13 +388,24 @@ def test_end_to_end_one_episode_trial_by_subprocess(tmp_path: Path) -> None:
     created_config_hash 与 manifest.config_hash 全等、summary.csv 行含 dev 指标。"""
     trials_yaml = tmp_path / "trials.yaml"
     trials_yaml.write_text(
-        yaml.safe_dump({
-            "trials": [{
-                "name": "smoke", "stage": "a", "episodes": 1, "seeds": [0],
-                "grid": {"scenarios": [SCENARIO], "seeds": [0], "zeroshot": True},
-                "config_overlay": {"ppo": {"learning_rate": 1.0e-4}},
-            }]
-        }),
+        yaml.safe_dump(
+            {
+                "trials": [
+                    {
+                        "name": "smoke",
+                        "stage": "a",
+                        "episodes": 1,
+                        "seeds": [0],
+                        "grid": {
+                            "scenarios": [SCENARIO],
+                            "seeds": [0],
+                            "zeroshot": True,
+                        },
+                        "config_overlay": {"ppo": {"learning_rate": 1.0e-4}},
+                    }
+                ]
+            }
+        ),
         encoding="utf-8",
     )
     tune_root = tmp_path / "runs_tune"
@@ -362,7 +419,9 @@ def test_end_to_end_one_episode_trial_by_subprocess(tmp_path: Path) -> None:
     for run_path in done_dirs:
         manifest = json.loads((run_path / "manifest.json").read_text(encoding="utf-8"))
         assert re.fullmatch(r"[0-9a-f]{64}", manifest["config_hash"])
-        assert manifest["git_commit"] is None or re.fullmatch(r"[0-9a-f]{40}", manifest["git_commit"])
+        assert manifest["git_commit"] is None or re.fullmatch(
+            r"[0-9a-f]{40}", manifest["git_commit"]
+        )
         assert manifest["config_hash"] == meta["created_config_hash"]
     assert results[0].dev_rows and results[0].dev_rows[0][:2] == ("Abilene.gml", 500)
     with (tune_root / "summary.csv").open("r", encoding="utf-8", newline="") as handle:
@@ -375,17 +434,44 @@ def test_tune_cli_dry_run_registered(tmp_path: Path) -> None:
     打印计划命令、退出 0、不落任何 tune 产物。"""
     trials_yaml = tmp_path / "trials.yaml"
     trials_yaml.write_text(
-        yaml.safe_dump({"trials": [{
-            "name": "smoke", "stage": "a", "episodes": 1, "seeds": [0],
-            "grid": {"scenarios": [SCENARIO], "seeds": [0], "zeroshot": True},
-        }]}),
+        yaml.safe_dump(
+            {
+                "trials": [
+                    {
+                        "name": "smoke",
+                        "stage": "a",
+                        "episodes": 1,
+                        "seeds": [0],
+                        "grid": {
+                            "scenarios": [SCENARIO],
+                            "seeds": [0],
+                            "zeroshot": True,
+                        },
+                    }
+                ]
+            }
+        ),
         encoding="utf-8",
     )
     tune_root = tmp_path / "runs_tune"
     proc = subprocess.run(
-        [sys.executable, "-m", "trl_sb3.run", "tune", "--trials", str(trials_yaml),
-         "--device", "cpu", "--dry-run", "--tune-root", str(tune_root)],
-        capture_output=True, text=True, timeout=300, check=False,
+        [
+            sys.executable,
+            "-m",
+            "trl_sb3.run",
+            "tune",
+            "--trials",
+            str(trials_yaml),
+            "--device",
+            "cpu",
+            "--dry-run",
+            "--tune-root",
+            str(tune_root),
+        ],
+        capture_output=True,
+        text=True,
+        timeout=300,
+        check=False,
     )
     assert proc.returncode == 0, proc.stderr
     assert "sweep" in proc.stdout

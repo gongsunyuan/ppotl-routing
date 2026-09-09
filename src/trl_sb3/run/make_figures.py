@@ -48,14 +48,22 @@ def compute_stats(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
     + paired t/Wilcoxon/cohens_d（aggregate.paired_arm_diffs），跨全部对 Holm
     校正（holm_p 追加入 dict）。共享种子 <2 的对跳过（全量 10 种子不触发）。"""
     pairs: list[dict[str, Any]] = []
-    scenes = sorted({_scene_of(r) for r in records if r["curve"] and r["arm"] not in NON_SCORING_ARMS})
+    scenes = sorted(
+        {
+            _scene_of(r)
+            for r in records
+            if r["curve"] and r["arm"] not in NON_SCORING_ARMS
+        }
+    )
     for topo, rate in scenes:
         arms = sorted(
             {
                 r["arm"]
                 for r in records
-                if _scene_of(r) == (topo, rate) and r["curve"]
-                and r["arm"] not in NON_SCORING_ARMS and r["arm"] != _BASELINE_ARM
+                if _scene_of(r) == (topo, rate)
+                and r["curve"]
+                and r["arm"] not in NON_SCORING_ARMS
+                and r["arm"] != _BASELINE_ARM
             }
         )
         for arm in arms:
@@ -63,7 +71,9 @@ def compute_stats(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 pairs.append(paired_arm_diffs(records, arm, _BASELINE_ARM, topo, rate))
             except ValueError:
                 continue
-    return [dict(pair, holm_p=p) for pair, p in zip(pairs, holm_family(pairs), strict=True)]
+    return [
+        dict(pair, holm_p=p) for pair, p in zip(pairs, holm_family(pairs), strict=True)
+    ]
 
 
 def _save(fig: Figure, out_dir: Path, stem: str) -> list[Path]:
@@ -71,7 +81,10 @@ def _save(fig: Figure, out_dir: Path, stem: str) -> list[Path]:
     written: list[Path] = []
     # 显式 dict[str, Any]：字面量会被推成 dict[str, int]，** 解包后 pyright 拿它对
     # savefig 任意 kw 参数（如 transparent: bool）做匹配而误报。
-    specs: tuple[tuple[str, dict[str, Any]], ...] = ((".png", {"dpi": 150}), (".pdf", {}))
+    specs: tuple[tuple[str, dict[str, Any]], ...] = (
+        (".png", {"dpi": 150}),
+        (".pdf", {}),
+    )
     for suffix, kwargs in specs:
         path = out_dir / f"{stem}{suffix}"
         fig.savefig(path, bbox_inches="tight", **kwargs)
@@ -80,7 +93,9 @@ def _save(fig: Figure, out_dir: Path, stem: str) -> list[Path]:
     return written
 
 
-def _write_stats(stats: list[dict[str, Any]], out_dir: Path, prereg: dict[str, Any]) -> None:
+def _write_stats(
+    stats: list[dict[str, Any]], out_dir: Path, prereg: dict[str, Any]
+) -> None:
     """统计 → stats.json（全量嵌套）+ stats.csv（扁平行）。"""
     (out_dir / "stats.json").write_text(
         json.dumps(
@@ -98,19 +113,42 @@ def _write_stats(stats: list[dict[str, Any]], out_dir: Path, prereg: dict[str, A
     with (out_dir / "stats.csv").open("w", encoding="utf-8", newline="") as handle:
         writer = csv.writer(handle)
         writer.writerow(
-            ["arm_a", "arm_b", "topo", "rate", "n_seeds", "seeds",
-             "mean_diff", "cohens_d", "t_p", "wilcoxon_p", "holm_p"]
+            [
+                "arm_a",
+                "arm_b",
+                "topo",
+                "rate",
+                "n_seeds",
+                "seeds",
+                "mean_diff",
+                "cohens_d",
+                "t_p",
+                "wilcoxon_p",
+                "holm_p",
+            ]
         )
         for pair in stats:
             writer.writerow(
-                [pair["arm_a"], pair["arm_b"], pair["topo"], pair["rate"], len(pair["seeds"]),
-                 ";".join(map(str, pair["seeds"])), pair["mean_diff"], pair["cohens_d"],
-                 pair["t_p"], pair["wilcoxon_p"], pair["holm_p"]]
+                [
+                    pair["arm_a"],
+                    pair["arm_b"],
+                    pair["topo"],
+                    pair["rate"],
+                    len(pair["seeds"]),
+                    ";".join(map(str, pair["seeds"])),
+                    pair["mean_diff"],
+                    pair["cohens_d"],
+                    pair["t_p"],
+                    pair["wilcoxon_p"],
+                    pair["holm_p"],
+                ]
             )
 
 
 def make_figures(
-    runs_dir: str | Path, out_dir: str | Path = "figures", prereg_path: str | Path = "config/metrics_prereg.yaml"
+    runs_dir: str | Path,
+    out_dir: str | Path = "figures",
+    prereg_path: str | Path = "config/metrics_prereg.yaml",
 ) -> dict[str, Any]:
     """IO 编排：collect_runs → 表/归一化/统计 → 主 2 图 + 叙事增项 2 图（计划 §5
     EXPLORATORY，全场景降级时跳过）+ stats + figure_manifest。
@@ -128,7 +166,11 @@ def make_figures(
     normalized, denominators = normalize_records(records)
     out_path.mkdir(parents=True, exist_ok=True)
     figures = [
-        *_save(build_adaptation_figure(normalized, table, int(prereg["window_episodes"])), out_path, "adaptation_curves"),
+        *_save(
+            build_adaptation_figure(normalized, table, int(prereg["window_episodes"])),
+            out_path,
+            "adaptation_curves",
+        ),
         *_save(build_asymptote_figure(table, denominators), out_path, "asymptote_bars"),
     ]
     # 叙事增项两图（计划 §5，EXPLORATORY）：全场景降级（缺 OSPF/A0 行或缺种子）
@@ -148,13 +190,27 @@ def make_figures(
         "runs": str(runs_path),
         "out": str(out_path),
         "normalization": "per-(topo,rate) max of r_mean_mean across all runs (MDPI tex:475)",
-        "denominators": {f"{topo}@{rate}": value for (topo, rate), value in sorted(denominators.items())},
-        "prereg": {key: prereg.get(key) for key in ("theta", "window_episodes", "asymptote_k", "alpha", "primary_metric")},
+        "denominators": {
+            f"{topo}@{rate}": value
+            for (topo, rate), value in sorted(denominators.items())
+        },
+        "prereg": {
+            key: prereg.get(key)
+            for key in (
+                "theta",
+                "window_episodes",
+                "asymptote_k",
+                "alpha",
+                "primary_metric",
+            )
+        },
         "figures": [path.name for path in figures],
         "stats_files": ["stats.json", "stats.csv"],
         "n_runs": len(records),
     }
-    (out_path / "figure_manifest.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+    (out_path / "figure_manifest.json").write_text(
+        json.dumps(manifest, indent=2), encoding="utf-8"
+    )
     print(
         f"[make_figures] runs={manifest['runs']} n_runs={manifest['n_runs']} "
         + f"denominators={manifest['denominators']} -> {manifest['out']}"
@@ -165,11 +221,16 @@ def make_figures(
 def main(argv: list[str] | None = None) -> int:
     """CLI：`python -m trl_sb3.run make_figures --runs runs_smoke --out figures_smoke`。"""
     parser = argparse.ArgumentParser(
-        prog="python -m trl_sb3.run make_figures", description="runs 目录 → 论文图 + 统计（M4）"
+        prog="python -m trl_sb3.run make_figures",
+        description="runs 目录 → 论文图 + 统计（M4）",
     )
-    parser.add_argument("--runs", default="runs", help="runs 目录（相对路径锚定 experiments/ 根）")
+    parser.add_argument(
+        "--runs", default="runs", help="runs 目录（相对路径锚定 experiments/ 根）"
+    )
     parser.add_argument("--out", default="figures", help="输出目录（缺省 figures/）")
-    parser.add_argument("--prereg", default="config/metrics_prereg.yaml", help="指标预注册 YAML 路径")
+    parser.add_argument(
+        "--prereg", default="config/metrics_prereg.yaml", help="指标预注册 YAML 路径"
+    )
     args = parser.parse_args(argv)
     make_figures(args.runs, args.out, args.prereg)
     return 0

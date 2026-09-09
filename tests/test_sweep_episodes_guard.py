@@ -66,7 +66,9 @@ def _ospf_row(cfg: dict[str, Any], grid: dict[str, Any]) -> tuple[Path, int]:
     return Path(cfg["paths"]["runs_dir"], task_run_id(task)), task.episodes
 
 
-def _fake_row(run_dir: Path, cfg: dict[str, Any], *, episodes: int, done: bool = True) -> None:
+def _fake_row(
+    run_dir: Path, cfg: dict[str, Any], *, episodes: int, done: bool = True
+) -> None:
     """伪造产物行：真实 build_manifest 口径（episodes 注入）写 manifest.json；done=True
     再补 DONE 标记（metrics.csv/eval.json 缺席不影响守卫与跳过语义）。"""
     write_manifest(
@@ -113,7 +115,9 @@ def test_skip_done_stale_episodes_raises_in_dry_run(tmp_path: Path) -> None:
     assert "episodes=5" in message and "episodes=10" in message
 
 
-def test_skip_done_stale_episodes_raises_in_real_run(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_skip_done_stale_episodes_raises_in_real_run(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Given 同上陈旧行；When run_sweep 实跑（resume 缺省 True，_execute 注入 boom）；
     Then 同一 SKIP-DONE 分支硬失败——实跑路径（status != "NEW" 进入共用分支）与
     dry-run（dry_run=True 进入）覆盖一致，且不触发任何执行。"""
@@ -140,7 +144,12 @@ def test_skip_done_matching_episodes_skips_without_execution(
     _fake_row(run_dir, cfg, episodes=planned)
     _forbid_execute(monkeypatch)
     summary = run_sweep(grid, base_config=cfg)
-    assert (summary.planned, summary.skipped_done, summary.done, summary.failed) == (1, 1, 0, 0)
+    assert (summary.planned, summary.skipped_done, summary.done, summary.failed) == (
+        1,
+        1,
+        0,
+        0,
+    )
 
 
 def test_skip_done_missing_manifest_raises(tmp_path: Path) -> None:
@@ -189,5 +198,10 @@ def test_new_task_with_mismatched_manifest_is_untouched(
 
     monkeypatch.setattr(sweep_module, "_execute", _stub)
     summary = run_sweep(grid, base_config=cfg)
-    assert (summary.planned, summary.done, summary.skipped_done, summary.failed) == (1, 1, 0, 0)
+    assert (summary.planned, summary.done, summary.skipped_done, summary.failed) == (
+        1,
+        1,
+        0,
+        0,
+    )
     assert executed == ["OSPF"]

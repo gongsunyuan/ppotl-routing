@@ -18,7 +18,9 @@ STEPS = 50
 
 
 def _make_env(topology: str, pbrs: bool = True, seed: int = 7) -> RoutingEnv:
-    return RoutingEnv(resolve_path(f"topologies/{topology}"), avgrate=500, pbrs=pbrs, seed=seed)
+    return RoutingEnv(
+        resolve_path(f"topologies/{topology}"), avgrate=500, pbrs=pbrs, seed=seed
+    )
 
 
 def _fixed_actions(n: int) -> npt.NDArray[np.int64]:
@@ -52,7 +54,10 @@ def test_same_seed_bitwise_identical_trajectory() -> None:
             for t in range(STEPS):
                 out_a = env_a.step(actions[t])
                 out_b = env_b.step(actions[t])
-                assert np.array_equal(out_a[0], out_b[0]) and out_a[0].dtype == out_b[0].dtype
+                assert (
+                    np.array_equal(out_a[0], out_b[0])
+                    and out_a[0].dtype == out_b[0].dtype
+                )
                 assert out_a[1] == out_b[1]
                 assert out_a[2] is False  # terminated 恒 False
                 assert out_a[3] == (t == STEPS - 1)  # truncated 恰在第 50 步
@@ -73,15 +78,15 @@ def test_cross_seed_differs() -> None:
 
 
 def test_shapes_and_zero_padding() -> None:
-    """Given CERNET/Abilene；When reset；Then (41,287)/(11,287) 且 Abilene 行尾 210 个零。"""
+    """Given CERNET/Abilene；When reset；Then (41,78)/(11,78) GRU路径池化版本。"""
     env_cernet = _make_env("CERNET.gml")
     obs_cernet, _ = env_cernet.reset()
-    assert obs_cernet.shape == (41, 287) and obs_cernet.dtype == np.float64
+    assert obs_cernet.shape == (41, 78) and obs_cernet.dtype == np.float64
     env_abilene = _make_env("Abilene.gml")
     obs_abilene, _ = env_abilene.reset()
-    assert obs_abilene.shape == (11, 287)
+    assert obs_abilene.shape == (11, 78)
     assert env_cernet._n == 41 and env_abilene._n == 11  # N§3：平行边坍缩后节点数
-    assert np.all(obs_abilene[:, 7 * 11 :] == 0.0)  # 7*(41-11)=210 个零
+    # GRU版本：obs=[self_feat(3), path_seqs(72), path_lens(3)]，无零填充
 
 
 def test_neighbors_ascending() -> None:

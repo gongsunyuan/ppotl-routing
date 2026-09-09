@@ -1,21 +1,23 @@
-# config/grid_main_a6wave.yaml — D5 A6 先行波派生网格(2026-09-01 预构建,GATE-2 裁决后执行)
-# 派生自 grid_main.yaml:仅保留完整臂 A6(冻结躯干全方法),补齐 4 场景全部基线行
-# (计划 §5 D5:OSPF/ECMP/LB/RR 零参数分钟级;grid_main 本体无 heuristic 键,此处显式加)。
-# 因素/预算与 grid_main 逐位一致 → run_id 不变:试点已 DONE 的行(3 预训练 + 3 A6@Abilene
-# + 3 A0@Abilene + 4 基线@Abilene)自动 SKIP-DONE,与余量波无缝衔接。
-# 任务量:10 预训练 + A6×4×10 + A0×4×10 + 4 OSPF + 12 启发式 = 106。
+# config/grid_main_a6wave.yaml — P1 A6 先行波网格（2026-09-09 重生成，新协议）
+# 协议：GRU 路径特征（78 维 obs，DEVIATIONS #15）+ 方案 A 超参（#16）+
+# 源域 Claranet@500 × 15000ep（#17，D6 裁决）+ 4 新目标场景（metrics_prereg v4）。
+# 派生自 grid_main.yaml：仅保留完整臂 A6（冻结 MLP 躯干），补齐 4 场景基线行。
+# 复用：预训练 s0-2 已在 runs/（Claranet@500 GRU 15000ep，factors 逐位一致，
+# episodes 不入 run_id 哈希）→ SKIP-DONE；Abilene@500 的 A0/基线行同理。
+# 任务量：10 预训练 + A6×4×10 + A0×4×10 + 4 OSPF + 12 启发式 ≈ 106。
+# 差距门（D5 机械判据）：任一场景 A6 种子均值 < OSPF−0.05 或 4 场景全败 → 暂停汇报。
 pretrain:
   seeds: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
-  episodes: 8000
+  episodes: 15000
 arms: [A6]
 scenarios:
-  - {topo: CERNET_failure.gml, avgrate: 500}
+  - {topo: Claranet_failure.gml, avgrate: 500}
   - {topo: Abilene.gml, avgrate: 500}
   - {topo: NFSCNET.gml, avgrate: 500}
-  - {topo: CERNET.gml, avgrate: 1500}
+  - {topo: Claranet.gml, avgrate: 1500}
 seeds: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
 adapt_episodes: 1000
-a1b_episodes: 9000
+a1b_episodes: 16000  # P2 预埋：等总预算对照臂 = 源 15000 + 适应 1000（旧 9000 按 8000+1000 作废）
 zeroshot: true
 ospf: true
 heuristic: [ECMP, LB, RR]

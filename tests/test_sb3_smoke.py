@@ -29,16 +29,20 @@ SEED = 7
 PPO_SEED = 0
 N_ABILENE = 11
 N_CERNET = 41
-OBS_DIM = 287
+OBS_DIM = 78  # 简化特征版本：3自身+18路径统计
 STEPS = 50
 
 
 def _make_vec(topo: str, seed: int) -> NodeFanVecEnv:
-    env = RoutingEnv(resolve_path(f"topologies/{topo}"), avgrate=500, pbrs=True, seed=seed)
+    env = RoutingEnv(
+        resolve_path(f"topologies/{topo}"), avgrate=500, pbrs=True, seed=seed
+    )
     return NodeFanVecEnv(env)
 
 
-def _ppo(vec: VecEnv, *, n_steps: int = 50, batch_size: int = 550, n_epochs: int = 10) -> PPO:
+def _ppo(
+    vec: VecEnv, *, n_steps: int = 50, batch_size: int = 550, n_epochs: int = 10
+) -> PPO:
     """冒烟超参在测试内显式传（论文口径见 config/default.yaml ppo 节）。"""
     return PPO(
         policy=ActorCriticPolicy,
@@ -68,19 +72,33 @@ def _layer_shapes(net: th.nn.Module) -> list[tuple[int, ...]]:
 
 
 def test_build_nets_structure_and_kaiming_reproducibility() -> None:
-    """Given build_nets(287, 3, seed)；When 构网两次；Then actor/critic 逐层 shape 镜像
-    legacy main.py:81-111（287→128→64→3 / →1、PReLU、无 Tanh），同 seed 两次 state_dict
-    逐位相等、异 seed 权重不同（kaiming 由 torch.Generator 控制，F2/D3）。"""
+    """Given build_nets(78, 3, seed)；When 构网两次；Then actor/critic 逐层 shape 镜像
+    GRU路径池化版本（FeatureExtractor + MLP: 99→128→64→3/1、PReLU、无 Tanh），
+    同 seed 两次 state_dict逐位相等、异 seed 权重不同（kaiming 由 torch.Generator 控制）。"""
     actor, critic = build_nets(obs_dim=OBS_DIM, n_actions=3, seed=SEED)
-    assert [type(m) for m in actor] == [th.nn.Linear, th.nn.PReLU, th.nn.Linear, th.nn.PReLU, th.nn.Linear]
-    assert _layer_shapes(actor) == [(128, 287), (64, 128), (3, 64)]
-    assert [type(m) for m in critic][:4] == [th.nn.Linear, th.nn.PReLU, th.nn.Linear, th.nn.PReLU]
-    assert _layer_shapes(critic) == [(128, 287), (64, 128), (1, 64)]
-    assert not any(isinstance(m, th.nn.Tanh) for m in (*actor, *critic))
+
+    # 检查结构：FeatureExtractor + MLP
+    assert len(actor) == 2, "Actor应该是Sequential(FeatureExtractor, MLP)"
+    assert len(critic) == 2, "Critic应该是Sequential(FeatureExtractor, MLP)"
+
+    # 检查MLP部分的shape (99→128→64→3/1)
+    mlp_actor = actor[1]
+    mlp_critic = critic[1]
+    assert _layer_shapes(mlp_actor) == [(128, 99), (64, 128), (3, 64)]
+    assert _layer_shapes(mlp_critic) == [(128, 99), (64, 128), (1, 64)]
+
+    # 检查无Tanh
+    assert not any(
+        isinstance(m, th.nn.Tanh) for m in (*actor.modules(), *critic.modules())
+    )
+
+    # 检查同seed复现性
     actor_b, critic_b = build_nets(obs_dim=OBS_DIM, n_actions=3, seed=SEED)
     for net_a, net_b in ((actor, actor_b), (critic, critic_b)):
         for pa, pb in zip(net_a.parameters(), net_b.parameters(), strict=True):
             assert th.equal(pa, pb)
+
+    # 检查异seed不同
     actor_c, _ = build_nets(obs_dim=OBS_DIM, n_actions=3, seed=SEED + 1)
     assert not th.equal(next(actor.parameters()), next(actor_c.parameters()))
 
@@ -88,13 +106,29 @@ def test_build_nets_structure_and_kaiming_reproducibility() -> None:
 def test_policy_wiring_bypasses_mlp_extractor() -> None:
     """Given 直接构造 ActorCriticPolicy（Abilene 空间）；When 构建完成；Then pi/vf 为独立
     两网（share_features_extractor=False、无 MlpExtractor、无 Tanh），action_net/value_net
-    无参数（Identity），float64 obs forward 出有限动作与值（preprocess_obs .float() 铸型）。"""
+    无参数（Identity），float64 obs forward 出有限动作与值（preprocess_obs .float() 铸型）。
+    GRU路径池化版本：检查MLP部分的shape 99→128→64。"""
     vec = _make_vec("Abilene.gml", SEED)
-    policy = ActorCriticPolicy(vec.observation_space, vec.action_space, lr_schedule=lambda _: 6.0e-6)
+    policy = ActorCriticPolicy(
+        vec.observation_space, vec.action_space, lr_schedule=lambda _: 6.0e-6
+    )
     assert policy.share_features_extractor is False
     assert not isinstance(policy.mlp_extractor, MlpExtractor)
-    assert _layer_shapes(policy.mlp_extractor.actor) == [(128, 287), (64, 128), (3, 64)]
-    assert _layer_shapes(policy.mlp_extractor.critic) == [(128, 287), (64, 128), (1, 64)]
+
+    # 检查MLP部分（actor.1是MLP Sequential）
+    mlp_actor = (
+        policy.mlp_extractor.actor[1]
+        if len(policy.mlp_extractor.actor) > 1
+        else policy.mlp_extractor.actor
+    )
+    mlp_critic = (
+        policy.mlp_extractor.critic[1]
+        if len(policy.mlp_extractor.critic) > 1
+        else policy.mlp_extractor.critic
+    )
+    assert _layer_shapes(mlp_actor) == [(128, 99), (64, 128), (3, 64)]
+    assert _layer_shapes(mlp_critic) == [(128, 99), (64, 128), (1, 64)]
+
     assert sum(p.numel() for p in policy.action_net.parameters()) == 0
     assert sum(p.numel() for p in policy.value_net.parameters()) == 0
     assert not any(isinstance(m, th.nn.Tanh) for m in policy.modules())
@@ -115,7 +149,11 @@ def test_ppo_learn_smoke_cpu() -> None:
     obs = th.as_tensor(vec.reset())
     actions = th.zeros(N_ABILENE, dtype=th.int64)
     values, log_prob, entropy = model.policy.evaluate_actions(obs, actions)
-    for tensor in (values, log_prob, entropy):  # entropy: Tensor | None（evaluate_actions 口径）
+    for tensor in (
+        values,
+        log_prob,
+        entropy,
+    ):  # entropy: Tensor | None（evaluate_actions 口径）
         assert tensor is not None
         assert th.isfinite(tensor).all()
     vec.close()
@@ -130,7 +168,9 @@ def test_save_load_roundtrip_bitwise(tmp_path: Any) -> None:
     path = str(tmp_path / "model")
     model.save(path)
     reloaded = PPO.load(path, device="cpu")
-    for pa, pb in zip(model.policy.parameters(), reloaded.policy.parameters(), strict=True):
+    for pa, pb in zip(
+        model.policy.parameters(), reloaded.policy.parameters(), strict=True
+    ):
         assert th.equal(pa, pb)
     vec.close()
 

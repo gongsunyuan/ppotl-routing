@@ -72,11 +72,18 @@ def test_prereg_status_marks_registration_before_phase1() -> None:
     change_log = meta["change_log"]
     assert [entry["version"] for entry in change_log] == [5, 4, 3, 2, 1]
     # v5(2026-08-31 hidden 轴 overlay 编码裁决):Block3 overlay 前缀补输入维 287
-    assert "裁决" in change_log[0]["change"] and "[287,256,128]" in change_log[0]["change"]
+    assert (
+        "裁决" in change_log[0]["change"] and "[287,256,128]" in change_log[0]["change"]
+    )
     # v4(2026-08-31 执行期机械勘误):plateau 曲线出处 eval.json + Stage-A 计量 a0_r_mean_mean
-    assert "勘误" in change_log[1]["change"] and "a0_r_mean_mean" in change_log[1]["change"]
+    assert (
+        "勘误" in change_log[1]["change"]
+        and "a0_r_mean_mean" in change_log[1]["change"]
+    )
     # v3(2026-08-31 执行前裁决):锚点补齐 3 种子闭合 9 配对点歧义
-    assert "裁决" in change_log[2]["change"] and "[100,101,102]" in change_log[2]["change"]
+    assert (
+        "裁决" in change_log[2]["change"] and "[100,101,102]" in change_log[2]["change"]
+    )
     assert "D4" in change_log[3]["change"] and "[A6]" in change_log[3]["change"]
     assert meta["plan"] == ".omo/plans/experiment-execution-plan.md"
 
@@ -200,36 +207,44 @@ def test_prereg_overlay_mapping_and_concurrency_placeholder() -> None:
 
 
 def test_metrics_prereg_narrative_extras_registered_and_version_bumped() -> None:
-    """Given metrics_prereg.yaml;When safe_load;Then meta.version 升到 3(v3=GATE-2
-    裁决落档——theta=null 即终局、v2=叙事增项注册留痕、v1=初始)且 narrative_extras
-    三项注册齐全:负载扫 rates/主拓扑解释与 GATE-2 确认旗标、ospf_agreement 开关
+    """Given metrics_prereg.yaml;When safe_load;Then meta.version 升到 4(v4=源域切换
+    立项 D6/D7/D8 裁决落档——保护对象改 4 新目标场景、load_sweep 主拓扑随源切
+    Claranet;v3=GATE-2 裁决 theta=null 即终局;v2=叙事增项注册留痕;v1=初始)且
+    narrative_extras 三项注册齐全:负载扫 rates/主拓扑解释、ospf_agreement 开关
     引用与 determinism 测试、Δ-vs-OSPF 与泛化差距面板定义,统一 EXPLORATORY 标签
     (计划 §5 主表余量);theta 锁死 null(逐场景 theta_rule 推导即终局口径)。"""
     doc = _load_metrics()
     meta = doc["meta"]
-    assert meta["version"] == 3
-    assert [entry["version"] for entry in meta["change_log"]] == [3, 2, 1]
+    assert meta["version"] == 4
+    assert [entry["version"] for entry in meta["change_log"]] == [4, 3, 2, 1]
     assert meta["status"] == "pre_registered_before_main_table_generation"
-    # v3 留痕须落 GATE-2 裁决:theta=null 终局 + 种子数缺省
-    assert "GATE-2" in meta["change_log"][0]["change"]
-    assert "终局" in meta["change_log"][0]["change"]
-    assert "n=10" in meta["change_log"][0]["change"]
+    # v4 留痕须落源域切换裁决:保护对象重定义 + D6/D7/D8
+    assert "源域切换" in meta["change_log"][0]["change"]
+    assert "D6" in meta["change_log"][0]["change"]
+    assert "Claranet_failure" in meta["change_log"][0]["change"]
     assert doc["theta"] is None  # v3 裁决:null 即终局,此后禁回填全局 float
-    # v2 留痕须点名三项增项;主拓扑解释须留 GATE-2 确认旗标
-    assert "叙事增项" in meta["change_log"][1]["change"]
-    assert "EXPLORATORY" in meta["change_log"][1]["change"]
+    # v3 留痕须落 GATE-2 裁决:theta=null 终局 + 种子数缺省
+    assert "GATE-2" in meta["change_log"][1]["change"]
+    assert "终局" in meta["change_log"][1]["change"]
+    assert "n=10" in meta["change_log"][1]["change"]
+    # v2 留痕须点名三项增项
+    assert "叙事增项" in meta["change_log"][2]["change"]
+    assert "EXPLORATORY" in meta["change_log"][2]["change"]
 
     extras = doc["narrative_extras"]
     assert extras["label"] == "exploratory"
     sweep = extras["load_sweep"]
     assert sweep["rates"] == [250, 500, 1000, 1500, 2000]
-    assert sweep["topology"] == "CERNET.gml"
-    assert "GATE-2" in sweep["topology_note"]
+    assert sweep["topology"] == "Claranet.gml"  # v4 随源切换更新（v2 注册时为 CERNET.gml）
+    assert "v4" in sweep["topology_note"]
     assert sweep["rows"]["arms"] == ["OSPF", "ECMP", "LB", "RR"]
 
     agreement = extras["ospf_agreement"]
     assert agreement["flag"] == "paper_defaults.eval.ospf_agreement_log"
-    assert "ospf_action" in agreement["definition"] and "ospf_agreement" in agreement["definition"]
+    assert (
+        "ospf_action" in agreement["definition"]
+        and "ospf_agreement" in agreement["definition"]
+    )
     assert "test_ospf_agreement_bitmatch" in agreement["determinism_proof"]
 
     assert "r_mean_mean" in extras["delta_vs_ospf"]["definition"]

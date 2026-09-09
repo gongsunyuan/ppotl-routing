@@ -24,7 +24,10 @@ from trl_sb3.eval.metrics import (
 def test_time_to_threshold_interpolates_known_crossing() -> None:
     """Given 线性曲线 (100,0.1),(200,0.3),(300,0.5)、θ=0.2、W=500；When τ；
     Then 0.1→0.3 段交点 e=150，未删失。"""
-    assert time_to_threshold([100, 200, 300], [0.1, 0.3, 0.5], 0.2, 500) == (150.0, False)
+    assert time_to_threshold([100, 200, 300], [0.1, 0.3, 0.5], 0.2, 500) == (
+        150.0,
+        False,
+    )
 
 
 def test_time_to_threshold_first_point_already_over() -> None:
@@ -34,7 +37,10 @@ def test_time_to_threshold_first_point_already_over() -> None:
 
 def test_time_to_threshold_censored_when_never_crosses() -> None:
     """Given 窗口内始终低于 θ；When τ；Then (W, True) 删失。"""
-    assert time_to_threshold([100, 200, 300], [0.0, 0.1, 0.2], 0.5, 500) == (500.0, True)
+    assert time_to_threshold([100, 200, 300], [0.0, 0.1, 0.2], 0.5, 500) == (
+        500.0,
+        True,
+    )
 
 
 def test_time_to_threshold_crossing_at_window_boundary() -> None:
@@ -47,7 +53,9 @@ def test_time_to_threshold_crossing_at_window_boundary() -> None:
 def test_window_auc_known_trapezoid() -> None:
     """Given 线性曲线 [100..500]×[0,0.2,…,0.8]、W=500；When AUC；
     Then 梯形积分=160（首点前不外推）、÷500=0.32。"""
-    assert window_auc([100, 200, 300, 400, 500], [0.0, 0.2, 0.4, 0.6, 0.8], 500) == pytest.approx(0.32)
+    assert window_auc(
+        [100, 200, 300, 400, 500], [0.0, 0.2, 0.4, 0.6, 0.8], 500
+    ) == pytest.approx(0.32)
 
 
 def test_window_auc_interpolates_window_boundary() -> None:
@@ -88,7 +96,9 @@ def test_asymptote_non_strict_degrades_k_to_available_points() -> None:
     单点曲线即便 strict=False 仍 ValueError（单点无 CI 可言）。"""
     center, half = asymptote([3.0, 5.0], 5, strict=False)
     assert center == 4.0
-    assert half == pytest.approx(float(sps.t.ppf(0.975, 1)) * 1.4142135623730951 / 2.0**0.5)
+    assert half == pytest.approx(
+        float(sps.t.ppf(0.975, 1)) * 1.4142135623730951 / 2.0**0.5
+    )
     with pytest.raises(ValueError, match="k>=2"):
         asymptote([4.0], 5, strict=False)
 
@@ -96,7 +106,9 @@ def test_asymptote_non_strict_degrades_k_to_available_points() -> None:
 def test_pooled_within_sd_known_value() -> None:
     """Given 两组 [1,2,3]/[3,4,5]（各 SS=2）；When 合并 SD；Then
     sqrt((2+2)/(6−2))=1.0；自由度不足（单组单值）→ ValueError。"""
-    assert pooled_within_sd({"a": [1.0, 2.0, 3.0], "b": [3.0, 4.0, 5.0]}) == pytest.approx(1.0)
+    assert pooled_within_sd(
+        {"a": [1.0, 2.0, 3.0], "b": [3.0, 4.0, 5.0]}
+    ) == pytest.approx(1.0)
     with pytest.raises(ValueError):
         pooled_within_sd({"a": [1.0]})
 

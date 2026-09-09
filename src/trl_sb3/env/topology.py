@@ -32,7 +32,9 @@ def load_topology(gml_path: str | Path) -> _DiGraph:
     return nx.DiGraph(adj)
 
 
-def k_shortest_paths(graph: _DiGraph, src: int, dst: int, k: int = 3) -> list[list[int]]:
+def k_shortest_paths(
+    graph: _DiGraph, src: int, dst: int, k: int = 3
+) -> list[list[int]]:
     """前 k 条（整数权和, 节点字典序）最短路径（legacy routingEnv.py:134-146 稳定化版）。
 
     shortest_simple_paths(weight="weight") 按权非降 yield；收集至「已收 ≥k 且

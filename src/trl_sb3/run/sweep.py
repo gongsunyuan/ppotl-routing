@@ -67,7 +67,9 @@ def _merged_config(grid: dict[str, Any], base_cfg: dict[str, Any]) -> dict[str, 
     overlay = grid.get("config_overlay")
     if overlay is not None:
         if not isinstance(overlay, dict):
-            raise ValueError(f"网格 config_overlay 必须为映射，got {type(overlay).__name__}")
+            raise ValueError(
+                f"网格 config_overlay 必须为映射，got {type(overlay).__name__}"
+            )
         if overlay:
             cfg = merge(cfg, overlay)
     return cfg
@@ -123,13 +125,17 @@ def plan_runs(grid: dict[str, Any], base_cfg: dict[str, Any]) -> list[RunTask]:
     a1b_episodes（缺省=预训练+适应）。"""
     cfg = _merged_config(grid, base_cfg)
     seeds = [int(s) for s in grid.get("seeds", [])]
-    scenarios = [(str(sc["topo"]), int(sc["avgrate"])) for sc in grid.get("scenarios", [])]
+    scenarios = [
+        (str(sc["topo"]), int(sc["avgrate"])) for sc in grid.get("scenarios", [])
+    ]
     pretrain_node = grid.get("pretrain") or {}
     pretrain_seeds = [int(s) for s in pretrain_node.get("seeds", [])]
     pretrain_episodes = int(cfg["pretrain"]["episodes"])
     adapt_episodes = int(cfg["adapt"]["episodes"])
     a1b_episodes = (
-        int(grid["a1b_episodes"]) if grid.get("a1b_episodes") is not None else pretrain_episodes + adapt_episodes
+        int(grid["a1b_episodes"])
+        if grid.get("a1b_episodes") is not None
+        else pretrain_episodes + adapt_episodes
     )
     eval_episodes = int(cfg["eval"]["eval_episodes"])
     tasks: list[RunTask] = [
@@ -149,30 +155,99 @@ def plan_runs(grid: dict[str, Any], base_cfg: dict[str, Any]) -> list[RunTask]:
             raise ValueError(f"网格含未知消融臂 {arm!r}；可用：{sorted(ARM_FACTORS)}")
         for topo, rate in scenarios:
             for seed in seeds:
-                source = _pretrain_run_id(cfg, seed) if ARM_FACTORS[arm]["pretrain"] else None
+                source = (
+                    _pretrain_run_id(cfg, seed)
+                    if ARM_FACTORS[arm]["pretrain"]
+                    else None
+                )
                 episodes = a1b_episodes if arm == "A1b" else adapt_episodes
                 tasks.append(
-                    RunTask(arm=arm, topo=topo, rate=rate, seed=seed, source_run_id=source, episodes=episodes, config=cfg)
+                    RunTask(
+                        arm=arm,
+                        topo=topo,
+                        rate=rate,
+                        seed=seed,
+                        source_run_id=source,
+                        episodes=episodes,
+                        config=cfg,
+                    )
                 )
     if grid.get("zeroshot", False):
         for topo, rate in scenarios:
             for seed in seeds:
                 tasks.append(
                     RunTask(
-                        arm="A0", topo=topo, rate=rate, seed=seed,
-                        source_run_id=_pretrain_run_id(cfg, seed), episodes=eval_episodes, config=cfg,
+                        arm="A0",
+                        topo=topo,
+                        rate=rate,
+                        seed=seed,
+                        source_run_id=_pretrain_run_id(cfg, seed),
+                        episodes=eval_episodes,
+                        config=cfg,
                     )
                 )
+    if grid.get("zeroshot_cross"):
+        # 随机组合零样本（2026-09-08 泛化实验）：每个源模型（多负载×多训练种子）
+        # × 每个目标场景 × 每个评估种子 的完整笛卡尔积——区别于 zeroshot 的
+        # 配对种子（seed s 模型 × seed s 评估流）。
+        zc: dict[str, Any] = grid["zeroshot_cross"]
+        if not isinstance(zc, dict):
+            raise ValueError(f"网格 zeroshot_cross 必须为映射，got {type(zc).__name__}")
+        cross_eval_seeds = [int(s) for s in zc.get("eval_seeds", seeds)]
+        cross_sources = zc.get("sources", [])
+        if not cross_sources:
+            raise ValueError("zeroshot_cross.sources 不能为空")
+        for src in cross_sources:
+            src_overlay = {
+                "pretrain": {
+                    "topology": str(src["topo"]),
+                    "avgrate": int(src["avgrate"]),
+                }
+            }
+            src_grid = {
+                **grid,
+                "config_overlay": merge(
+                    dict(grid.get("config_overlay") or {}), src_overlay
+                ),
+            }
+            src_cfg = _merged_config(src_grid, base_cfg)
+            for src_seed in [int(s) for s in src.get("seeds", pretrain_seeds)]:
+                source = _pretrain_run_id(src_cfg, src_seed)
+                for topo, rate in scenarios:
+                    for eseed in cross_eval_seeds:
+                        tasks.append(
+                            RunTask(
+                                arm="A0",
+                                topo=topo,
+                                rate=rate,
+                                seed=eseed,
+                                source_run_id=source,
+                                episodes=eval_episodes,
+                                config=cfg,
+                            )
+                        )
     if grid.get("ospf", False):
         # OSPF 的 run_id 无 seed 因素（run_ospf_eval 恒 seed=0）→ 每场景只计划 1 行。
         for topo, rate in scenarios:
             tasks.append(
-                RunTask(arm="OSPF", topo=topo, rate=rate, seed=0, source_run_id=None, episodes=eval_episodes, config=cfg)
+                RunTask(
+                    arm="OSPF",
+                    topo=topo,
+                    rate=rate,
+                    seed=0,
+                    source_run_id=None,
+                    episodes=eval_episodes,
+                    config=cfg,
+                )
             )
     heuristics = [str(name) for name in grid.get("heuristic", [])]
-    unknown_heuristics = [name for name in heuristics if name not in HEURISTIC_SPLIT_FNS]
+    unknown_heuristics = [
+        name for name in heuristics if name not in HEURISTIC_SPLIT_FNS
+    ]
     if unknown_heuristics:
-        raise ValueError(f"网格含未知启发式 {unknown_heuristics}；可用：{sorted(HEURISTIC_SPLIT_FNS)}")
+        raise ValueError(
+            f"网格含未知启发式 {unknown_heuristics}；可用：{sorted(HEURISTIC_SPLIT_FNS)}"
+        )
     if heuristics:
         # 启发式同 OSPF 口径：确定性分流、run_id 无 seed 因素（恒 seed=0）→ 每场景每策略 1 行；
         # 评估回合数独立读 eval.heuristic_episodes（§5 十评估种子协议）。
@@ -180,14 +255,24 @@ def plan_runs(grid: dict[str, Any], base_cfg: dict[str, Any]) -> list[RunTask]:
         for name in heuristics:
             for topo, rate in scenarios:
                 tasks.append(
-                    RunTask(arm=name, topo=topo, rate=rate, seed=0, source_run_id=None, episodes=heuristic_episodes, config=cfg)
+                    RunTask(
+                        arm=name,
+                        topo=topo,
+                        rate=rate,
+                        seed=0,
+                        source_run_id=None,
+                        episodes=heuristic_episodes,
+                        config=cfg,
+                    )
                 )
     return tasks
 
 
 def _lineage_ok(source_run_id: str, runs_root: Path, ckpts_root: Path) -> bool:
     """源 lineage 完整：源 ckpt zip 存在且源 run 目录 DONE（D5：缺源拒绝启动迁移臂）。"""
-    return (ckpts_root / f"{source_run_id}.zip").exists() and is_done(runs_root / source_run_id)
+    return (ckpts_root / f"{source_run_id}.zip").exists() and is_done(
+        runs_root / source_run_id
+    )
 
 
 def _matches(task: RunTask, filters: str | Sequence[str] | None) -> bool:
@@ -201,14 +286,21 @@ def _matches(task: RunTask, filters: str | Sequence[str] | None) -> bool:
 def _execute(task: RunTask, device: str) -> Path:
     """分派单任务到底层 runner（顺序执行；产物契约与 FAILED 落盘由 runner 负责）。"""
     if task.arm == "pretrain":
-        return run_pretrain(task.seed, episodes=task.episodes, device=device, config=task.config)
+        return run_pretrain(
+            task.seed, episodes=task.episodes, device=device, config=task.config
+        )
     if task.arm == "OSPF":
         return run_ospf_eval(task.topo, task.rate, config=task.config)
     if task.arm in HEURISTIC_SPLIT_FNS:
         return run_heuristic_eval(task.arm, task.topo, task.rate, config=task.config)
     if task.arm == "A0":
         return run_zeroshot(
-            task.source_run_id or "", task.topo, task.rate, seed=task.seed, device=device, config=task.config
+            task.source_run_id or "",
+            task.topo,
+            task.rate,
+            seed=task.seed,
+            device=device,
+            config=task.config,
         )
     return run_arm(
         task.arm,
@@ -268,10 +360,16 @@ def run_sweep(
     tasks = [task for task in plan_runs(grid, base_cfg) if _matches(task, filters)]
     runs_root = resolve_path(cfg["paths"]["runs_dir"])
     ckpts_root = resolve_path(cfg["paths"]["ckpts_dir"])
-    planned_pretrain_ids = {task_run_id(task) for task in tasks if task.arm == "pretrain"}
-    print(f"[sweep] grid={grid_path} tasks={len(tasks)} dry_run={dry_run} device={device} strict={strict}")
+    planned_pretrain_ids = {
+        task_run_id(task) for task in tasks if task.arm == "pretrain"
+    }
+    print(
+        f"[sweep] grid={grid_path} tasks={len(tasks)} dry_run={dry_run} device={device} strict={strict}"
+    )
     if not dry_run:
-        print("[sweep] Windows 长跑提醒（管理员 PowerShell）：powercfg /change standby-timeout-ac 0")
+        print(
+            "[sweep] Windows 长跑提醒（管理员 PowerShell）：powercfg /change standby-timeout-ac 0"
+        )
     done = skipped_done = skipped_lineage = failed = 0
     for index, task in enumerate(tasks, start=1):
         run_id = task_run_id(task)
@@ -291,7 +389,9 @@ def run_sweep(
             + f"episodes={task.episodes} run_id={run_id}"
         )
         if status == "SKIP-LINEAGE" and strict:
-            raise RuntimeError(f"lineage 守卫拒绝（--strict）：{task.arm} 的源 {task.source_run_id} 缺 ckpt 或未 DONE")
+            raise RuntimeError(
+                f"lineage 守卫拒绝（--strict）：{task.arm} 的源 {task.source_run_id} 缺 ckpt 或未 DONE"
+            )
         if dry_run or status != "NEW":
             if status == "SKIP-DONE":
                 _assert_skip_done_episodes(runs_root, run_id, task)
@@ -304,9 +404,15 @@ def run_sweep(
             done += 1
         except Exception as exc:  # noqa: BLE001 — sweep 边界：单 run 崩溃须隔离不拖垮其余 run；FAILED 已由 runner 落盘
             failed += 1
-            print(f"[sweep] FAILED arm={task.arm} seed={task.seed} run_id={run_id}: {exc!r}")
+            print(
+                f"[sweep] FAILED arm={task.arm} seed={task.seed} run_id={run_id}: {exc!r}"
+            )
     summary = SweepSummary(
-        planned=len(tasks), done=done, skipped_done=skipped_done, skipped_lineage=skipped_lineage, failed=failed
+        planned=len(tasks),
+        done=done,
+        skipped_done=skipped_done,
+        skipped_lineage=skipped_lineage,
+        failed=failed,
     )
     print(
         f"[sweep] summary: planned={summary.planned} done={summary.done} "

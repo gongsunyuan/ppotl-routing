@@ -1,8 +1,8 @@
 """M2-1 冻结语义测试（决策 D4）：apply_freeze/rebuild_optimizer 契约。
 
-覆盖：requires_grad 状态（config frozen_layers=actor.0-3 含两 PReLU 口径）、
-冻结参数训练全程零梯度零漂移、头重初始化范数变化与躯干逐位不变、
-seed 复现、优化器只含可训练参数、幂等。
+覆盖：requires_grad 状态（config frozen_layers=actor.1.0-3 MLP 躯干口径，
+GRU 版 actor.0=FeatureExtractor 不进冻结清单）、冻结参数训练全程零梯度零漂移、
+头重初始化范数变化与躯干逐位不变、seed 复现、优化器只含可训练参数、幂等。
 
 SB3 2.7.0 出处：ppo/ppo.py:274-278 走 loss.backward()+optimizer.step()，
 requires_grad=False 参数不建计算图 → .grad 恒 None；train 末 zero_grad()
@@ -17,13 +17,14 @@ from stable_baselines3 import PPO
 from stable_baselines3.common.vec_env import VecMonitor
 from test_sb3_smoke import SEED, _make_vec, _ppo
 
-from trl_sb3.policy.freeze import apply_freeze, rebuild_optimizer
+from trl_sb3.common.config import load_config
+from trl_sb3.policy.freeze import _module_at, apply_freeze, rebuild_optimizer
 from trl_sb3.policy.policy import ActorCriticPolicy
 
 REINIT_SEED = 42
 N_ABILENE = 11
 STEPS = 50
-HEAD_PREFIX = "mlp_extractor.actor.4."
+HEAD_PREFIX = "mlp_extractor.actor.1.4."  # GRU 版：actor[1]=MLP，头=actor[1][4]
 
 
 def _policy() -> ActorCriticPolicy:
@@ -31,27 +32,43 @@ def _policy() -> ActorCriticPolicy:
     vec = _make_vec("Abilene.gml", SEED)
     try:
         th.manual_seed(SEED)
-        return ActorCriticPolicy(vec.observation_space, vec.action_space, lr_schedule=lambda _: 6.0e-6)
+        return ActorCriticPolicy(
+            vec.observation_space, vec.action_space, lr_schedule=lambda _: 6.0e-6
+        )
     finally:
         vec.close()
 
 
 def _head(net: th.nn.Sequential) -> th.nn.Linear:
-    """net[-1] 静态类型是 Sequential | Module（torch stub）；收窄到输出头 Linear。"""
-    head = net[-1]
-    assert isinstance(head, th.nn.Linear)
-    return head
+    """沿末子模块下钻到最内层输出头 Linear（GRU 版 actor=Sequential(FeatureExtractor, MLP)）。"""
+    node: th.nn.Module = net[-1]
+    while isinstance(node, th.nn.Sequential):
+        node = node[-1]
+    assert isinstance(node, th.nn.Linear)
+    return node
+
+
+def _frozen_param_names(policy: ActorCriticPolicy) -> set[str]:
+    """按 config frozen_layers 锚点解析冻结参数名集（与 apply_freeze 同一 _module_at 口径）。"""
+    frozen_ids = {
+        id(p)
+        for anchor in load_config()["freeze"]["frozen_layers"]
+        for p in _module_at(policy, anchor).parameters()
+    }
+    return {n for n, p in policy.named_parameters() if id(p) in frozen_ids}
 
 
 def test_apply_freeze_requires_grad_states() -> None:
-    """Given Abilene policy；When apply_freeze；Then 冻结清单 actor.0/1/2/3（含两
-    PReLU，D4 除输出头外全冻结）全 False，头 actor.4 True，critic 全 True。"""
+    """Given Abilene policy；When apply_freeze；Then config frozen_layers
+    （actor.1.0-3 = MLP 躯干 Linear(99,128)/两 PReLU/Linear(128,64)）全 False，
+    FeatureExtractor（actor.0）与头 actor[1][4] True，critic 全 True。"""
     policy = _policy()
     apply_freeze(policy, seed=REINIT_SEED)
-    actor = policy.mlp_extractor.actor
-    for idx in (0, 1, 2, 3):
-        assert all(not p.requires_grad for p in actor[idx].parameters())
-    assert all(p.requires_grad for p in actor[-1].parameters())
+    frozen = _frozen_param_names(policy)
+    assert frozen, "前提：config 冻结清单非空"
+    for name, param in policy.named_parameters():
+        assert param.requires_grad == (name not in frozen), name
+    assert all(p.requires_grad for p in _head(policy.mlp_extractor.actor).parameters())
     assert all(p.requires_grad for p in policy.mlp_extractor.critic.parameters())
 
 
@@ -87,9 +104,15 @@ def test_reinit_head_changes_norm_torso_bitwise_unchanged() -> None:
     apply_freeze(policy, seed=REINIT_SEED)
     head_w = _head(policy.mlp_extractor.actor).weight.detach()
     head_b = _head(policy.mlp_extractor.actor).bias.detach()
-    assert not th.equal(before["mlp_extractor.actor.4.weight"], head_w)
-    assert not th.equal(before["mlp_extractor.actor.4.bias"], head_b)
-    assert abs(before["mlp_extractor.actor.4.weight"].norm().item() - head_w.norm().item()) > 0.0
+    assert not th.equal(before["mlp_extractor.actor.1.4.weight"], head_w)
+    assert not th.equal(before["mlp_extractor.actor.1.4.bias"], head_b)
+    assert (
+        abs(
+            before["mlp_extractor.actor.1.4.weight"].norm().item()
+            - head_w.norm().item()
+        )
+        > 0.0
+    )
     for name, param in policy.named_parameters():
         if not name.startswith(HEAD_PREFIX):
             assert th.equal(before[name], param.detach())
@@ -126,7 +149,9 @@ def test_rebuild_optimizer_trainable_only() -> None:
     assert isinstance(model.policy, ActorCriticPolicy)
     apply_freeze(model.policy, seed=REINIT_SEED)
     rebuild_optimizer(model)
-    opt_ids = {id(p) for group in model.policy.optimizer.param_groups for p in group["params"]}
+    opt_ids = {
+        id(p) for group in model.policy.optimizer.param_groups for p in group["params"]
+    }
     trainable_ids = {id(p) for p in model.policy.parameters() if p.requires_grad}
     frozen_ids = {id(p) for p in model.policy.parameters() if not p.requires_grad}
     assert opt_ids == trainable_ids

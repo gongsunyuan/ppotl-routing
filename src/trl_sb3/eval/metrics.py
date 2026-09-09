@@ -79,7 +79,10 @@ def window_auc(episodes: Sequence[int], values: Sequence[float], window: int) ->
         e_next, v_next = float(episodes[len(points)]), float(values[len(points)])
         e_last, v_last = points[-1]
         points.append(
-            (float(window), v_last + (v_next - v_last) * (window - e_last) / (e_next - e_last))
+            (
+                float(window),
+                v_last + (v_next - v_last) * (window - e_last) / (e_next - e_last),
+            )
         )
     elif points[-1][0] < window:  # 曲线在 W 前结束 → LOCF
         points.append((float(window), points[-1][1]))
@@ -98,7 +101,9 @@ def mean_t_ci(values: Sequence[float]) -> tuple[float, float]:
     return mean(values), half
 
 
-def asymptote(values: Sequence[float], k: int, *, strict: bool = True) -> tuple[float, float]:
+def asymptote(
+    values: Sequence[float], k: int, *, strict: bool = True
+) -> tuple[float, float]:
     """渐近性能（计划 §5-3）：末 k 个评估点均值 ±95%CI 半宽（t 分布，n=k_eff）。
 
     k ≥ 2 契约：k_eff=1 无方差、CI 无定义 → ValueError（预注册 k=5，勿传 1）。
@@ -108,7 +113,9 @@ def asymptote(values: Sequence[float], k: int, *, strict: bool = True) -> tuple[
     """
     k_eff = min(k, len(values)) if not strict else k
     if k_eff < 2:
-        raise ValueError("渐近 CI 需 k>=2（k_eff=1 单点无 CI 可言；预注册 k=5，勿传 1）")
+        raise ValueError(
+            "渐近 CI 需 k>=2（k_eff=1 单点无 CI 可言；预注册 k=5，勿传 1）"
+        )
     if len(values) < k_eff:
         raise ValueError(f"评估点数 {len(values)} < k_eff={k_eff}")
     return mean_t_ci(values[-k_eff:])

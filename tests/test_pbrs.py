@@ -25,7 +25,9 @@ RTOL, ATOL = 1e-9, 1e-12
 
 
 def _make_env(topology: str, pbrs: bool, seed: int = 7) -> RoutingEnv:
-    return RoutingEnv(resolve_path(f"topologies/{topology}"), avgrate=500, pbrs=pbrs, seed=seed)
+    return RoutingEnv(
+        resolve_path(f"topologies/{topology}"), avgrate=500, pbrs=pbrs, seed=seed
+    )
 
 
 def _fixed_actions(n: int) -> npt.NDArray[np.int64]:
@@ -36,7 +38,11 @@ def _fixed_actions(n: int) -> npt.NDArray[np.int64]:
 
 def _rollout(
     env: RoutingEnv, actions: npt.NDArray[np.int64]
-) -> tuple[list[npt.NDArray[np.float64]], list[npt.NDArray[np.float64]], list[npt.NDArray[np.float64]]]:
+) -> tuple[
+    list[npt.NDArray[np.float64]],
+    list[npt.NDArray[np.float64]],
+    list[npt.NDArray[np.float64]],
+]:
     """reset 后跑满 STEPS 步，返回 (obs 序列, reward_local 序列, G 序列)；G 由 info 的 rd/rp 现算。"""
     beta, alpha = env._beta_delay, env._alpha_plr
     env.reset()
@@ -80,12 +86,17 @@ def test_shaped_unshaped_return_equivalence(topology: str) -> None:
     shaped_return = disc @ np.array(local_seq)
     unshaped_return = disc @ np.array(g_seq)
     boundary = (gamma**STEPS) * g_seq[-1]
-    assert np.allclose(shaped_return - unshaped_return, boundary, rtol=RTOL, atol=ATOL), (
+    assert np.allclose(
+        shaped_return - unshaped_return, boundary, rtol=RTOL, atol=ATOL
+    ), (
         f"{topology}: per-node max|Δ-boundary|="
         f"{np.abs(shaped_return - unshaped_return - boundary).max():.3e}"
     )
     assert np.allclose(
-        shaped_return.mean() - unshaped_return.mean(), boundary.mean(), rtol=RTOL, atol=ATOL
+        shaped_return.mean() - unshaped_return.mean(),
+        boundary.mean(),
+        rtol=RTOL,
+        atol=ATOL,
     )
 
 
@@ -94,7 +105,9 @@ def test_first_step_shaped_form(topology: str) -> None:
     """Given pbrs=True 且刚 reset（G_prev = Φ(s_0) = 0）；When 第 1 步；Then reward_local == G_1·(1+γ)。"""
     env = _make_env(topology, pbrs=True)
     _, local_seq, g_seq = _rollout(env, _fixed_actions(TOPOLOGIES[topology]))
-    assert np.allclose(local_seq[0], (1.0 + env._gamma) * g_seq[0], rtol=RTOL, atol=ATOL)
+    assert np.allclose(
+        local_seq[0], (1.0 + env._gamma) * g_seq[0], rtol=RTOL, atol=ATOL
+    )
 
 
 @pytest.mark.parametrize("topology", TOPOLOGIES, ids=list(TOPOLOGIES))

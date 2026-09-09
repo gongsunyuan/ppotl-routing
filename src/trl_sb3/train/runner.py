@@ -115,8 +115,12 @@ class _RunLogger(BaseCallback):
             self._episode += 1
             self._step = 0
             if self._episode % self._interval == 0:
-                assert isinstance(self.model, PPO)  # 本回调只挂 PPO（_train_and_write 唯一构造点）
-                result = greedy_eval(ppo_policy(self.model), self._topo, self._rate, config=self._config)
+                assert isinstance(
+                    self.model, PPO
+                )  # 本回调只挂 PPO（_train_and_write 唯一构造点）
+                result = greedy_eval(
+                    ppo_policy(self.model), self._topo, self._rate, config=self._config
+                )
                 point: dict[str, float] = {"episode": self._episode}
                 point.update({key: result[key] for key in EVAL_AGG_KEYS})
                 self.curve.append(point)
@@ -140,7 +144,9 @@ def _build_model(vec: VecMonitor, spec: _RunSpec, ckpts_dir: Path) -> PPO:
     到达 policy；lr_critic_ratio 键 seam 3 才加入 default.yaml，缺省 None 只随
     ckpt 往返不消费）；加载臂不传——SB3 load 从 zip 恢复源 policy_kwargs。"""
     if spec.source_run_id is not None:
-        model = PPO.load(ckpts_dir / f"{spec.source_run_id}.zip", env=vec, device=spec.device)
+        model = PPO.load(
+            ckpts_dir / f"{spec.source_run_id}.zip", env=vec, device=spec.device
+        )
         # D2 整批：batch_size 必须等于 n_steps×**目标**拓扑节点数。ckpt 恢复的是源拓扑
         # 的整批（如 CERNET 41 节点的 2050），对 N=11 的 rollout（550）会在 PPO.train
         # 的 mini-batch 切分上出错——加载后按目标 N 重算。
@@ -151,7 +157,11 @@ def _build_model(vec: VecMonitor, spec: _RunSpec, ckpts_dir: Path) -> PPO:
         return model
     ppo_cfg = spec.config["ppo"]
     n_nodes = vec.num_envs
-    batch_size = ppo_cfg["n_steps"] * n_nodes if ppo_cfg["batch_size"] is None else int(ppo_cfg["batch_size"])
+    batch_size = (
+        ppo_cfg["n_steps"] * n_nodes
+        if ppo_cfg["batch_size"] is None
+        else int(ppo_cfg["batch_size"])
+    )
     model = PPO(
         policy=ActorCriticPolicy,
         env=vec,
@@ -205,7 +215,9 @@ def run_arm(
             pbrs=factors["pbrs"],
             freeze=factors["freeze"],
             source_run_id=source_run_id if factors["pretrain"] else None,
-            episodes=int(cfg["adapt"]["episodes"]) if episodes is None else int(episodes),
+            episodes=int(cfg["adapt"]["episodes"])
+            if episodes is None
+            else int(episodes),
             out_root=Path(out_root) if out_root is not None else None,
             ckpts_dir=None,
             device=device,
@@ -226,13 +238,23 @@ def _train_and_write(spec: _RunSpec) -> Path:
         freeze=spec.freeze,
         pretrain=spec.source_run_id or None,
     )
-    out_root = spec.out_root if spec.out_root is not None else resolve_path(spec.config["paths"]["runs_dir"])
-    ckpts_dir = spec.ckpts_dir if spec.ckpts_dir is not None else resolve_path(spec.config["paths"]["ckpts_dir"])
+    out_root = (
+        spec.out_root
+        if spec.out_root is not None
+        else resolve_path(spec.config["paths"]["runs_dir"])
+    )
+    ckpts_dir = (
+        spec.ckpts_dir
+        if spec.ckpts_dir is not None
+        else resolve_path(spec.config["paths"]["ckpts_dir"])
+    )
     directory = run_dir(out_root, run_id)
     if is_done(directory):
         return directory
     try:
-        env = build_routing_env(spec.topo, spec.rate, pbrs=spec.pbrs, seed=spec.seed, config=spec.config)
+        env = build_routing_env(
+            spec.topo, spec.rate, pbrs=spec.pbrs, seed=spec.seed, config=spec.config
+        )
         vec = VecMonitor(NodeFanVecEnv(env))
         model = _build_model(vec, spec, ckpts_dir)
         steps_per_episode = int(spec.config["env"]["episode_steps"])
@@ -241,17 +263,27 @@ def _train_and_write(spec: _RunSpec) -> Path:
         (directory / "metrics.csv").unlink(missing_ok=True)
         with MetricsCSVWriter(directory / "metrics.csv", METRICS_COLUMNS) as writer:
             logger = _RunLogger(
-                writer, arm=spec.arm, topo=spec.topo, rate=spec.rate, seed=spec.seed, config=spec.config
+                writer,
+                arm=spec.arm,
+                topo=spec.topo,
+                rate=spec.rate,
+                seed=spec.seed,
+                config=spec.config,
             )
             model.learn(
-                total_timesteps=spec.episodes * steps_per_episode * vec.num_envs, callback=logger
+                total_timesteps=spec.episodes * steps_per_episode * vec.num_envs,
+                callback=logger,
             )
-        final_eval = greedy_eval(ppo_policy(model), spec.topo, spec.rate, config=spec.config)
+        final_eval = greedy_eval(
+            ppo_policy(model), spec.topo, spec.rate, config=spec.config
+        )
         eval_payload: dict[str, Any] = {
             "curve": logger.curve,
             "final": {key: final_eval[key] for key in EVAL_AGG_KEYS},
         }
-        if "ospf_agreement" in final_eval:  # 叙事增项缝（计划 §5）：仅 ON 时附加（OFF 字节同旧）
+        if (
+            "ospf_agreement" in final_eval
+        ):  # 叙事增项缝（计划 §5）：仅 ON 时附加（OFF 字节同旧）
             eval_payload["ospf_agreement"] = final_eval["ospf_agreement"]
         write_manifest(directory / "eval.json", eval_payload)
         manifest = build_manifest(
@@ -260,7 +292,11 @@ def _train_and_write(spec: _RunSpec) -> Path:
             spec.topo,
             spec.rate,
             spec.seed,
-            factors={"pretrain": spec.source_run_id is not None, "freeze": spec.freeze, "pbrs": spec.pbrs},
+            factors={
+                "pretrain": spec.source_run_id is not None,
+                "freeze": spec.freeze,
+                "pbrs": spec.pbrs,
+            },
             source_run_id=spec.source_run_id,
             episodes=spec.episodes,
             device=spec.device,
