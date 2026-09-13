@@ -201,8 +201,8 @@ def test_guard_refuses_git_commit_mismatch(tmp_path: Path) -> None:
     meta = _current_meta(tmp_path)
     cur = meta["git_commit"] or "0" * 40
     flipped = (
-        cur[-1] if cur[-1] != "1" else "0"
-    )  # 末位确定性翻转（HEAD 以 1 结尾时换 0）
+        "0" if cur[-1] != "0" else "1"
+    )  # 末位确定性翻转，保证与原值不同（与 HEAD 实际末位无关）
     meta["git_commit"] = cur[:39] + flipped
     _write_meta(root, meta)
     with pytest.raises(TrialCollisionError, match="git_commit"):
