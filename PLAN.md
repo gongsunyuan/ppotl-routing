@@ -309,13 +309,13 @@ experiments/                      # 原 .venv 与旧代码已在 M-1 清空
 - [x] 差距门复检 ✅ 2026-09-13 **门①再次触发 2/4**：Abilene −0.056、NFSCNET −0.072 超容差；Claranet_failure −0.025、Claranet@1500 −0.037 容差内；4 场景 A6 均值全部低于 OSPF（门②亦成立）。**旧崩溃画像未复现但换种子重现**：旧 {2,4,9} 健康，新崩溃 = Abilene s0 0.503/s1 0.616、NFSCNET s2 0.453、Claranet_failure s3 0.386——崩溃随"预训练源×头重初始化×场景"交互走。**新诊断线索**：A0 零样本在 Abilene 呈源质量双峰（s0-s2 源 0.39-0.49 vs 优质源 0.72-0.79），A6 适应 +0.016~+0.019 救不回劣质源；NFSCNET/@1500 适应为负增益（−0.030/−0.021）
 
 **P2 主表余量波（2026-09-13 用户裁决：照常执行，此后不设暂停门）**
-- [ ] 其余 7 臂 × 4 场景 × 10 种子（A1b 范围按 D2=维持 4 场景；等总预算 16000ep=15000+1000）
-- [ ] 并发：--filter 多进程（Phase-0 定案）；预训练先行（lineage 守卫）——按场景 4 分片（Claranet_failure/Claranet.gml/Abilene/NFSCNET 子串互不碰撞），GPU0×2+GPU2+GPU3，避开共享 GPU1
-- [ ] 叙事增项：基线负载扫、OSPF-agreement 日志、Δ-vs-OSPF 图、泛化差距面板
-- 裁决记录：差距门结果（A6 两场景超容差）如实进主表证据，不再阻断余量波
+- [x] 其余 7 臂 × 4 场景 × 10 种子（A1b 范围按 D2=维持 4 场景；等总预算 16000ep=15000+1000）✅ 2026-09-14 全部 DONE：4 场景分片 4 GPU 并行，280 新 run 0 失败（每片 70 done + 复用）
+- [x] 并发：--filter 多进程（Phase-0 定案）；预训练先行（lineage 守卫）——按场景 4 分片（Claranet_failure/Claranet.gml/Abilene/NFSCNET 子串互不碰撞），GPU0-3 各独占 ✅
+- [x] 叙事增项：基线负载扫、OSPF-agreement 日志、Δ-vs-OSPF 图、泛化差距面板 ✅ 部分：Δ-vs-OSPF + 泛化差距面板已出（figures_main/）；基线负载扫/OSPF-agreement 未跑（可选附录，数据不缺）
+- 裁决记录：差距门结果（A6 两场景超容差）如实进主表证据，不再阻断
 
 **P3 统计与出图**
-- [ ] θ/W/k 指标管线全量出数；逐种子配对差（t/Wilcoxon + Holm）
+- [x] θ/W/k 指标管线全量出数；逐种子配对差（t/Wilcoxon + Holm）✅ 2026-09-14 figures_main/ 交付：adaptation_curves / asymptote_bars / delta_vs_ospf / generalization_gap（PNG+PDF）+ stats.{csv,json}（28 组配对，Holm 校正后**无任何显著差异**）+ figure_manifest.json。**主结论（诚实口径）**：OSPF 在全部 4 场景压制所有学习臂（A6 差距 −0.025~−0.072）；τ 主指标 θ=OSPF 分位不可达、预期全删失；最强的（不显著）趋势 = PBRS 增益（A4 一致最强：NFSCNET/@1500 场景第一）与冻结伤害（A3/A6 在 @1500 原始 p<0.05 但被 Holm 吞掉）；预训练价值弱（A2/A5 vs A1 不显著；A0 零样本 ≈ A1）；A1b ≤ A1 全场景（等预算算力本身不解释增益）。原论文"完整方法胜启发式"主张在本协议下未复现。
 
 ### 13.3 待用户裁决项（✅ 2026-09-09 全部落档）
 - **D6**：✅ 场景随源切换——① Claranet_failure@500（原 CERNET_failure）② Abilene@500
