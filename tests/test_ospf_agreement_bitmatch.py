@@ -66,14 +66,15 @@ def test_metrics_csv_bit_identical_on_off(run_pair: tuple[Path, Path]) -> None:
 def test_eval_json_identical_except_agreement_field(
     run_pair: tuple[Path, Path],
 ) -> None:
-    """Given 同上；When 解析两侧 eval.json；Then OFF 侧仅 {curve, final}（final 恰
-    四聚合键，纯附加证明）；ON 侧 == OFF 侧 + 顶层 ospf_agreement，无其他差异。"""
+    """Given 同上；When 解析两侧 eval.json；Then OFF 侧仅 {curve, final,
+    final_last, best}（DEVIATIONS #18 新增两键；final 恰四聚合键，纯附加证明）；
+    ON 侧 == OFF 侧 + 顶层 ospf_agreement，无其他差异。"""
     off, on = run_pair
     off_json = json.loads((off / "eval.json").read_text(encoding="utf-8"))
     on_json = json.loads((on / "eval.json").read_text(encoding="utf-8"))
-    assert set(off_json) == {"curve", "final"}
+    assert set(off_json) == {"curve", "final", "final_last", "best"}
     assert set(off_json["final"]) == {"r_mean_mean", "rd_mean", "rp_mean", "th_mean"}
-    assert set(on_json) == {"curve", "final", "ospf_agreement"}
+    assert set(on_json) == {"curve", "final", "final_last", "best", "ospf_agreement"}
     assert on_json["curve"] == off_json["curve"]
     assert on_json["final"] == off_json["final"]
 

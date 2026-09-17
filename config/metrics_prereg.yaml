@@ -2,14 +2,16 @@
 # 防事后择优：θ/W/k/α 跑主表前钉死于此；指标（eval/metrics.py）与聚合器
 # （run/aggregate.py）按本文件取值，代码不硬编码。theta=null = 终局口径
 # （GATE-2 2026-09-01 裁决：逐场景按 theta_rule 推导即预注册口径，v3 留痕）。
+# v5（2026-09-15）：final = 峰值检查点评估（DEVIATIONS #18），final_last 留档旧口径。
 # 任何偏离须显式修订本文件（升 meta.version 并留痕，约定对齐 tuning_prereg.yaml）。
 
 # —— meta：预注册身份与版本留痕（2026-08-31 随叙事增项注册引入）——
 meta:
   status: pre_registered_before_main_table_generation  # 叙事增项先于主表余量数据生成注册（计划 §5）
-  date: "2026-09-09"                                   # 引号防 YAML date 类型化
-  version: 4
+  date: "2026-09-15"                                   # 引号防 YAML date 类型化
+  version: 5
   change_log:
+    - {version: 5, date: "2026-09-15", change: "最优检查点机制立项（DEVIATIONS #18，用户裁决）：final 语义改为峰值检查点评估（周期评估严格大于更新、并列首见），final_last 留档旧末态口径；血统 ckpt 同存峰值快照；新增 losses.csv 训练损失记录（纯附加，不进指标族）。旧口径 v4 产物整体归档 runs_final_ckpt_v1/ 不删除，v5 批换目录全量重跑；θ/W/k/α 与统计口径不动（θ 输入端的 OSPF 行为确定性基线不受影响）"}
     - {version: 4, date: "2026-09-09", change: "源域切换立项（DEVIATIONS #17，D6/D7/D8 用户裁决）：保护对象改为 4 新目标场景（Claranet_failure@500 / Abilene@500 / NFSCNET@500 / Claranet@1500，随源 CERNET→Claranet 重定义）；load_sweep 主拓扑解释改为 Claranet.gml（预训练源拓扑随切换）；D7 探针 6 搭配不并入主表、D8 @300 轻载不进主表（维持搁置）；旧 287 维协议预构建网格作废。θ/W/k/α 与 v3 一致不动"}
     - {version: 3, date: "2026-09-01", change: "GATE-2 裁决落档（§7.4 缺省，试点+先行波全程按此口径聚合）：theta 保持 null = 逐场景按 theta_rule 推导为终局口径（试点单场景数值无法代表主表 4 场景，禁回填全局 float——会把 CERNET 系场景 τ 全删失）；负载扫主拓扑解释 CERNET.gml 随 v2 注册生效；终版种子数 n=10 维持计划缺省（功效敏感性：稳定臂可检出 δ≈0.89σ、崩溃臂 δ≈0.19）"}
     - {version: 2, date: "2026-08-31", change: "叙事增项注册（计划 §5 主表余量，冻结前入预注册信封；全部 EXPLORATORY——不进确认性指标族/显著性族，不回灌 θ/W/k，增项数据缺席不阻塞主表）：① 基线负载扫 rates [250,500,1000,1500,2000] × 主拓扑（解释 = 预训练源拓扑 CERNET.gml，GATE-2 待用户确认）；② OSPF-agreement 率日志（paper_defaults.eval.ospf_agreement_log，默认 false，on/off 位同 determinism 测试锁定）；③ Δ-vs-OSPF 逐场景面板 + 泛化差距面板（make_figures 小扩展）"}

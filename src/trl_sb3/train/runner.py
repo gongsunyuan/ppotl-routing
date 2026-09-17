@@ -2,17 +2,27 @@
 
 臂因子表 ARM_FACTORS 逐条对齐计划 §4（pretrain/freeze/pbrs）；run_id 全经
 make_run_id（确定性，断点续跑/DONE 跳过依赖它）；产物：metrics.csv（每步一行）、
-eval.json（周期曲线+终评聚合）、manifest.json、ckpt、DONE 最后 / FAILED 带 traceback。
+losses.csv（每 PPO 更新一批的训练损失，DEVIATIONS #18）、eval.json（周期曲线+
+终评聚合 + best/final_last 字段）、manifest.json、ckpt、best_model.zip、DONE 最后
+/ FAILED 带 traceback。
+
+最优检查点语义（DEVIATIONS #18，2026-09-15 起）：周期评估（eval_interval 回合）
+出现新高（严格大于，并列保持首见）即保存 best_model.zip；终评 final = 加载峰值
+检查点的贪心评估（无评估点时回落末态），血统 ckpt（ckpts_dir/<run_id>.zip）同存
+峰值模型——预训练与适应臂同一语义。final_last = 末态评估（旧口径留档，可比性）。
 """
 
 from __future__ import annotations
 
+import shutil
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, override
 
+import torch as th
 from stable_baselines3 import PPO
 from stable_baselines3.common.callbacks import BaseCallback
+from stable_baselines3.common.logger import KVWriter
 from stable_baselines3.common.vec_env import VecMonitor
 
 from trl_sb3.common.config import load_config, resolve_path
@@ -34,6 +44,39 @@ from trl_sb3.env.node_fan_vec import NodeFanVecEnv
 from trl_sb3.eval.evaluate import EVAL_AGG_KEYS, greedy_eval, ppo_policy
 from trl_sb3.policy.freeze import apply_freeze, rebuild_optimizer
 from trl_sb3.policy.policy import ActorCriticPolicy
+
+# losses.csv 列契约（DEVIATIONS #18）：SB3 PPO 每 train() 批 dump 的 train/* 键
+# 去前缀平铺、按固定键集投影（clip_range/learning_rate/n_updates 等超参快照不入表）；
+# update = 本 run 内第几次参数更新（= 第几个 rollout，n_steps=50 即每回合一次），
+# timesteps = dump 时全局步数。
+LOSS_TRAIN_KEYS: tuple[str, ...] = (
+    "policy_gradient_loss",
+    "value_loss",
+    "entropy_loss",
+    "approx_kl",
+    "clip_fraction",
+    "explained_variance",
+    "loss",
+)
+LOSS_COLUMNS: tuple[str, ...] = ("update", "timesteps", *LOSS_TRAIN_KEYS)
+
+
+def _loss_row(
+    key_values: dict[str, Any], step: float, next_update: int
+) -> dict[str, float] | None:
+    """train/* 键值 → 固定列行；无目标键（纯 rollout/time 批）返回 None。"""
+    flat = {
+        k.split("/", 1)[1]: float(v)
+        for k, v in key_values.items()
+        if k.startswith("train/")
+    }
+    row = {k: flat[k] for k in LOSS_TRAIN_KEYS if k in flat}
+    if not row:
+        return None
+    row["update"] = float(next_update)
+    row["timesteps"] = float(step)
+    return row
+
 
 # 计划 §4 因子表（pretrain/freeze/pbrs）。A1b 等总预算对照与 A1 同因子
 # （预算差由 sweep #9 的 episodes 承担，不入因子）；A3b = 随机网络冻结对照。
@@ -67,10 +110,42 @@ class _RunSpec:
     config: dict[str, Any]
 
 
+class _LossTap(KVWriter):
+    """SB3 logger 的 KVWriter 抽头：每次 dump 把 train/* 键值流入 sink 列表。
+
+    必须继承 KVWriter——Logger.dump 对每个 format 做 isinstance(form, KVWriter)
+    硬检查，鸭子类型会被静默跳过（venv 源码 logger.py:538-540 实证）。
+    SB3 的 dump 在 train() 之前触发（on_policy_algorithm.py learn 循环），末批
+    训练 loss 残留在 name_to_value 不出仓——由 _RunLogger.final_loss_flush 收尾。
+    不消耗任何 RNG，训练轨迹不受影响。
+    """
+
+    def __init__(self, sink: list[dict[str, float]]) -> None:
+        super().__init__()
+        self._sink = sink
+
+    def write(
+        self,
+        key_values: dict[str, Any],
+        key_excluded: dict[str, tuple[str, ...]],
+        step: int = 0,
+    ) -> None:
+        row = _loss_row(key_values, float(step), len(self._sink) + 1)
+        if row is not None:
+            self._sink.append(row)
+
+    def close(self) -> None:
+        return None
+
+
 class _RunLogger(BaseCallback):
     """训练日志：on_step 取 infos[0] 的 rd/rp/th（per-node 均值）与 r_mean 写 csv 行；
     回合边界 = info["TimeLimit.truncated"]（NodeFanVecEnv 每步恒置该键）；每
-    eval_interval 回合在干净评估 env 上 greedy_eval 记曲线点（评估/训练 env 严格分离）。"""
+    eval_interval 回合在干净评估 env 上 greedy_eval 记曲线点（评估/训练 env 严格分离）；
+    曲线点出现 r_mean_mean 新高（严格大于，并列保持首见）时保存峰值快照（DEVIATIONS
+    #18 最优检查点）：best_model.zip（完整模型，冻结臂优化器为冻结子集态）+
+    best_policy.pt（纯策略权重——终评回灌用，避开 PPO.load 对冻结臂优化器的
+    组数失配）。"""
 
     def __init__(
         self,
@@ -81,6 +156,8 @@ class _RunLogger(BaseCallback):
         rate: int,
         seed: int,
         config: dict[str, Any],
+        best_ckpt_path: Path | None = None,
+        best_policy_path: Path | None = None,
     ) -> None:
         super().__init__(verbose=0)
         self._writer: MetricsCSVWriter = writer
@@ -93,6 +170,17 @@ class _RunLogger(BaseCallback):
         self._episode: int = 0
         self._step: int = 0
         self.curve: list[dict[str, float]] = []
+        self._best_ckpt_path: Path | None = best_ckpt_path
+        self._best_policy_path: Path | None = best_policy_path
+        self.best_episode: int | None = None
+        self.best_eval: dict[str, float] | None = None
+        self.loss_rows: list[dict[str, float]] = []
+
+    @override
+    def _on_training_start(self) -> None:
+        """learn() 启动时挂 loss 抽头——SB3 的 logger 在 _setup_learn() 才建好
+        （构造后 model.logger 抛 AttributeError），此处是首个可挂载点。"""
+        self.model.logger.output_formats.append(_LossTap(self.loss_rows))
 
     @override
     def _on_step(self) -> bool:
@@ -124,9 +212,39 @@ class _RunLogger(BaseCallback):
                 point: dict[str, float] = {"episode": self._episode}
                 point.update({key: result[key] for key in EVAL_AGG_KEYS})
                 self.curve.append(point)
+                if (
+                    self._best_ckpt_path is not None
+                    and self._best_policy_path is not None
+                    and (
+                        self.best_eval is None
+                        or result["r_mean_mean"] > self.best_eval["r_mean_mean"]
+                    )
+                ):
+                    self.best_episode = self._episode
+                    self.best_eval = {key: float(result[key]) for key in EVAL_AGG_KEYS}
+                    self.model.save(self._best_ckpt_path)
+                    th.save(self.model.policy.state_dict(), self._best_policy_path)
         else:
             self._step += 1
         return True
+
+    def final_loss_flush(self) -> None:
+        """learn() 结束后补收末批训练 loss：dump 在 train() 前触发，最后一次
+        train() 的记录残留在 logger.name_to_value，不收就缺一行。"""
+        assert isinstance(self.model, PPO)
+        row = _loss_row(
+            self.model.logger.name_to_value,
+            float(self.model.num_timesteps),
+            len(self.loss_rows) + 1,
+        )
+        if row is not None:
+            self.loss_rows.append(row)
+
+    def write_losses(self, path: Path) -> None:
+        """把 _LossTap 攒的批次行写 losses.csv（learn 完成后调用；中断 run 不留此文件）。"""
+        with MetricsCSVWriter(path, LOSS_COLUMNS) as writer:
+            for row in self.loss_rows:
+                writer.write_row(row)
 
 
 def _freeze(model: PPO, spec: _RunSpec) -> None:
@@ -261,6 +379,11 @@ def _train_and_write(spec: _RunSpec) -> Path:
         # truncate-on-restart（issues.md M3）：无 DONE 的中断 run 复跑时，旧 metrics.csv
         # 会被 append 模式重复累积 episode 行——先删，保证每 run 的 metrics 行集与本次执行一致。
         (directory / "metrics.csv").unlink(missing_ok=True)
+        (directory / "losses.csv").unlink(missing_ok=True)
+        best_ckpt_path = directory / "best_model.zip"
+        best_policy_path = directory / "best_policy.pt"
+        best_ckpt_path.unlink(missing_ok=True)
+        best_policy_path.unlink(missing_ok=True)
         with MetricsCSVWriter(directory / "metrics.csv", METRICS_COLUMNS) as writer:
             logger = _RunLogger(
                 writer,
@@ -269,17 +392,38 @@ def _train_and_write(spec: _RunSpec) -> Path:
                 rate=spec.rate,
                 seed=spec.seed,
                 config=spec.config,
+                best_ckpt_path=best_ckpt_path,
+                best_policy_path=best_policy_path,
             )
             model.learn(
                 total_timesteps=spec.episodes * steps_per_episode * vec.num_envs,
                 callback=logger,
             )
-        final_eval = greedy_eval(
+        logger.final_loss_flush()
+        logger.write_losses(directory / "losses.csv")
+        # 终评（DEVIATIONS #18）：final = 峰值策略评估（best_policy.pt 回灌当前
+        # 模型——不整模型重载，避开冻结臂优化器组数失配）；final_last = 末态评估
+        # （旧口径留档）。无评估点（episodes < eval_interval）回落末态。
+        final_last_eval = greedy_eval(
             ppo_policy(model), spec.topo, spec.rate, config=spec.config
         )
+        if logger.best_episode is not None:
+            model.policy.load_state_dict(
+                th.load(best_policy_path, weights_only=True, map_location="cpu")
+            )
+            final_eval = greedy_eval(
+                ppo_policy(model), spec.topo, spec.rate, config=spec.config
+            )
+        else:
+            final_eval = final_last_eval
+        best_payload: dict[str, Any] | None = None
+        if logger.best_eval is not None and logger.best_episode is not None:
+            best_payload = {"episode": float(logger.best_episode), **logger.best_eval}
         eval_payload: dict[str, Any] = {
             "curve": logger.curve,
             "final": {key: final_eval[key] for key in EVAL_AGG_KEYS},
+            "final_last": {key: final_last_eval[key] for key in EVAL_AGG_KEYS},
+            "best": best_payload,
         }
         if (
             "ospf_agreement" in final_eval
@@ -304,7 +448,13 @@ def _train_and_write(spec: _RunSpec) -> Path:
         )
         write_manifest(directory / "manifest.json", manifest)
         ckpts_dir.mkdir(parents=True, exist_ok=True)
-        model.save(ckpts_dir / run_id)  # 全部训练臂都存 ckpt（<run_id>.zip）
+        # 血统 ckpt：有峰值时直接字节复制峰值完整快照（策略+优化器同刻配对），
+        # 无峰值存末态。冻结臂 zip 的优化器是冻结子集态——消费方（_build_model
+        # 冻结路径 / 下游重冻结）加载后必经 rebuild_optimizer，语义一致。
+        if logger.best_episode is not None:
+            shutil.copyfile(best_ckpt_path, ckpts_dir / f"{run_id}.zip")
+        else:
+            model.save(ckpts_dir / run_id)  # 全部训练臂都存 ckpt（<run_id>.zip）
         mark_done(directory)
     except Exception as exc:
         mark_failed(directory, exc)

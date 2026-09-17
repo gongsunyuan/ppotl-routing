@@ -207,35 +207,41 @@ def test_prereg_overlay_mapping_and_concurrency_placeholder() -> None:
 
 
 def test_metrics_prereg_narrative_extras_registered_and_version_bumped() -> None:
-    """Given metrics_prereg.yaml;When safe_load;Then meta.version 升到 4(v4=源域切换
-    立项 D6/D7/D8 裁决落档——保护对象改 4 新目标场景、load_sweep 主拓扑随源切
-    Claranet;v3=GATE-2 裁决 theta=null 即终局;v2=叙事增项注册留痕;v1=初始)且
+    """Given metrics_prereg.yaml;When safe_load;Then meta.version 升到 5(v5=最优
+    检查点机制立项——final 改峰值评估、final_last 留档旧口径、losses.csv 附加;
+    v4=源域切换 D6/D7/D8;v3=GATE-2 theta=null 终局;v2=叙事增项;v1=初始)且
     narrative_extras 三项注册齐全:负载扫 rates/主拓扑解释、ospf_agreement 开关
     引用与 determinism 测试、Δ-vs-OSPF 与泛化差距面板定义,统一 EXPLORATORY 标签
     (计划 §5 主表余量);theta 锁死 null(逐场景 theta_rule 推导即终局口径)。"""
     doc = _load_metrics()
     meta = doc["meta"]
-    assert meta["version"] == 4
-    assert [entry["version"] for entry in meta["change_log"]] == [4, 3, 2, 1]
+    assert meta["version"] == 5
+    assert [entry["version"] for entry in meta["change_log"]] == [5, 4, 3, 2, 1]
     assert meta["status"] == "pre_registered_before_main_table_generation"
-    # v4 留痕须落源域切换裁决:保护对象重定义 + D6/D7/D8
-    assert "源域切换" in meta["change_log"][0]["change"]
-    assert "D6" in meta["change_log"][0]["change"]
-    assert "Claranet_failure" in meta["change_log"][0]["change"]
+    # v5 留痕须落最优检查点机制:final 语义变更 + 归档不删
+    assert "最优检查点" in meta["change_log"][0]["change"]
+    assert "final_last" in meta["change_log"][0]["change"]
+    assert "runs_final_ckpt_v1" in meta["change_log"][0]["change"]
     assert doc["theta"] is None  # v3 裁决:null 即终局,此后禁回填全局 float
+    # v4 留痕须落源域切换裁决:保护对象重定义 + D6/D7/D8
+    assert "源域切换" in meta["change_log"][1]["change"]
+    assert "D6" in meta["change_log"][1]["change"]
+    assert "Claranet_failure" in meta["change_log"][1]["change"]
     # v3 留痕须落 GATE-2 裁决:theta=null 终局 + 种子数缺省
-    assert "GATE-2" in meta["change_log"][1]["change"]
-    assert "终局" in meta["change_log"][1]["change"]
-    assert "n=10" in meta["change_log"][1]["change"]
+    assert "GATE-2" in meta["change_log"][2]["change"]
+    assert "终局" in meta["change_log"][2]["change"]
+    assert "n=10" in meta["change_log"][2]["change"]
     # v2 留痕须点名三项增项
-    assert "叙事增项" in meta["change_log"][2]["change"]
-    assert "EXPLORATORY" in meta["change_log"][2]["change"]
+    assert "叙事增项" in meta["change_log"][3]["change"]
+    assert "EXPLORATORY" in meta["change_log"][3]["change"]
 
     extras = doc["narrative_extras"]
     assert extras["label"] == "exploratory"
     sweep = extras["load_sweep"]
     assert sweep["rates"] == [250, 500, 1000, 1500, 2000]
-    assert sweep["topology"] == "Claranet.gml"  # v4 随源切换更新（v2 注册时为 CERNET.gml）
+    assert (
+        sweep["topology"] == "Claranet.gml"
+    )  # v4 随源切换更新（v2 注册时为 CERNET.gml）
     assert "v4" in sweep["topology_note"]
     assert sweep["rows"]["arms"] == ["OSPF", "ECMP", "LB", "RR"]
 

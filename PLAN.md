@@ -327,5 +327,8 @@ experiments/                      # 原 .venv 与旧代码已在 M-1 清空
 
 ### 13.4 优化轮遗留悬项（不阻塞主表，影响论文口径）
 - lr 调度器（用户搁置 2026-09-08）
-- 最优 checkpoint 保存机制（@300 曲线峰值 0.86-0.90 不可复现）
-- runner loss 曲线记录（论文 Fig3 收敛分析需要）
+- ~~最优 checkpoint 保存机制（@300 曲线峰值 0.86-0.90 不可复现）~~ ✅ 2026-09-15 已实现
+  （DEVIATIONS #18：final=峰值评估 + final_last 留档 + 血统 ckpt 存峰值 + losses.csv
+  训练损失记录；v5 全量重跑批执行中，旧口径产物归档 runs_final_ckpt_v1/）
+- ~~runner loss 曲线记录（论文 Fig3 收敛分析需要）~~ ✅ 2026-09-15 已实现（同上，
+  losses.csv 每 PPO 更新一批；SB3 KVWriter 抽头，训练随机流零扰动）
