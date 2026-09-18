@@ -1,0 +1,14 @@
+# config/grid_v5_fig3_ppo.yaml — 论文 Fig3 收敛分析对照侧（2026-09-15）
+# 朴素 PPO（从零、无 PBRS）在源域 Claranet@500 等预算 15000 回合 × 3 种子——
+# 与预训练侧（PPO+PBRS，同域同预算）组成 actor/critic loss + 奖励收敛对照。
+# 我们方法侧 = 同批预训练 s0-2 的 losses.csv 与 eval 曲线。
+pretrain:
+  seeds: []
+  episodes: 15000
+arms: [A1]
+scenarios:
+  - {topo: Claranet.gml, avgrate: 500}
+seeds: [0, 1, 2]
+adapt_episodes: 15000
+zeroshot: false
+ospf: false

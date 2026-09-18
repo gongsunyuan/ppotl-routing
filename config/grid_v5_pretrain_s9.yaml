@@ -1,0 +1,10 @@
+# config/grid_v5_pretrain_s9.yaml — v5 阶段1预训练分片（DEVIATIONS #18 最优检查点）
+# 全量重跑批的血统前置：4 分片并行（每卡 2-3 个 × ~97min），跑完放行阶段 2 场景分片。
+pretrain:
+  seeds: [9]
+  episodes: 15000
+arms: []
+scenarios: []
+seeds: []
+zeroshot: false
+ospf: false
