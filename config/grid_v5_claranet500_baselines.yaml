@@ -1,0 +1,13 @@
+# config/grid_v5_claranet500_baselines.yaml — fig3 场景基线补齐（2026-09-19）
+# fig3 对照（A1@Claranet@500）使聚合端把 (Claranet,500) 视为场景；θ 推导要求
+# 同场景 OSPF 行——补 4 条零参数基线行，顺带丰富 fig3 的参照系。
+pretrain:
+  seeds: []
+  episodes: 15000
+arms: []
+scenarios:
+  - {topo: Claranet.gml, avgrate: 500}
+seeds: []
+zeroshot: false
+ospf: true
+heuristic: [ECMP, LB, RR]
