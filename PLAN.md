@@ -311,7 +311,7 @@ experiments/                      # 原 .venv 与旧代码已在 M-1 清空
 **P2 主表余量波（2026-09-13 用户裁决：照常执行，此后不设暂停门）**
 - [x] 其余 7 臂 × 4 场景 × 10 种子（A1b 范围按 D2=维持 4 场景；等总预算 16000ep=15000+1000）✅ 2026-09-14 全部 DONE：4 场景分片 4 GPU 并行，280 新 run 0 失败（每片 70 done + 复用）
 - [x] 并发：--filter 多进程（Phase-0 定案）；预训练先行（lineage 守卫）——按场景 4 分片（Claranet_failure/Claranet.gml/Abilene/NFSCNET 子串互不碰撞），GPU0-3 各独占 ✅
-- [x] 叙事增项：基线负载扫、OSPF-agreement 日志、Δ-vs-OSPF 图、泛化差距面板 ✅ 部分：Δ-vs-OSPF + 泛化差距面板已出（figures_main/）；基线负载扫/OSPF-agreement 未跑（可选附录，数据不缺）
+- [x] 叙事增项：基线负载扫、OSPF-agreement 日志、Δ-vs-OSPF 图、泛化差距面板 ✅ 2026-09-19 收口：Δ-vs-OSPF + 泛化差距面板出图；基线负载扫 12 行已跑（grid_v5_load_sweep.yaml，Claranet × 250-2000 × 4 基线，runs/ 393→405，fig5_load_sweep 图交付）；OSPF-agreement 用户裁决不跑（2026-09-19）
 - 裁决记录：差距门结果（A6 两场景超容差）如实进主表证据，不再阻断
 
 **P3 统计与出图**

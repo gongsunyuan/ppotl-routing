@@ -1,0 +1,18 @@
+# config/grid_v5_load_sweep.yaml — 负载扫基线行（预注册 narrative_extras.load_sweep，v2 注册/v4 随源更新）
+# Claranet × rates [250,500,1000,1500,2000] × OSPF/ECMP/LB/RR，seed 0 零参数评估行
+# （EXPLORATORY，不进确认性指标族/显著性族）；500/1500 两档已有行 DONE-skip
+# 幂等跳过，本网格实际新跑 12 行。数据用途：论文 fig5 负载响应图。
+pretrain:
+  seeds: []
+  episodes: 15000
+arms: []
+scenarios:
+  - {topo: Claranet.gml, avgrate: 250}
+  - {topo: Claranet.gml, avgrate: 500}
+  - {topo: Claranet.gml, avgrate: 1000}
+  - {topo: Claranet.gml, avgrate: 1500}
+  - {topo: Claranet.gml, avgrate: 2000}
+seeds: []
+zeroshot: false
+ospf: true
+heuristic: [ECMP, LB, RR]
