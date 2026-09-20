@@ -43,6 +43,24 @@ from trl_sb3.run.figures import (
 _BASELINE_ARM = "A1"
 
 
+def _filter_protection(
+    records: list[dict[str, Any]], prereg: dict[str, Any]
+) -> list[dict[str, Any]]:
+    """呈现层场景过滤（prereg v6）：protection_scenes 缺席 → 原样返回。
+
+    键在（"Topo.gml@500" 形式）→ 仅保留列出的 (topo, rate)。非指标口径：
+    compute_stats/θ 的输入语义不变——被滤场景（fig3 对照 A1@Claranet@500、
+    负载扫基线行）本就无配对比较。"""
+    specs = prereg.get("protection_scenes")
+    if not specs:
+        return records
+    keep: set[tuple[str, int]] = set()
+    for spec in specs:
+        topo, _, rate = str(spec).partition("@")
+        keep.add((topo, int(rate)))
+    return [r for r in records if (r["topo"], r["rate"]) in keep]
+
+
 def compute_stats(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """统计族（纯函数）：逐场景每学习臂 vs A1 逐种子配对差（final r_mean_mean）
     + paired t/Wilcoxon/cohens_d（aggregate.paired_arm_diffs），跨全部对 Holm
@@ -162,6 +180,9 @@ def make_figures(
     records = collect_runs(runs_path)
     if not records:
         raise ValueError(f"runs 目录无 DONE 产物：{runs_path}")
+    records = _filter_protection(records, prereg)
+    if not records:
+        raise ValueError(f"protection_scenes 过滤后无残留记录：{runs_path}")
     table = compute_table(records, prereg)
     normalized, denominators = normalize_records(records)
     out_path.mkdir(parents=True, exist_ok=True)

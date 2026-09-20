@@ -21,6 +21,7 @@ from statistics import stdev
 from typing import Any
 
 import pytest
+import yaml
 from matplotlib import pyplot as plt
 
 from trl_sb3.run.figures import (
@@ -32,7 +33,7 @@ from trl_sb3.run.figures import (
     normalize_records,
     topo_label,
 )
-from trl_sb3.run.make_figures import compute_stats, make_figures
+from trl_sb3.run.make_figures import _filter_protection, compute_stats, make_figures
 
 PKG_ROOT = Path(__file__).resolve().parents[1]
 SMOKE_RUNS = PKG_ROOT / "runs_smoke"
@@ -286,9 +287,15 @@ def test_make_figures_end_to_end_artifacts(runs_source: Path, tmp_path: Path) ->
     figure_manifest.json，主图文件 >10KB、增项图 PNG 非空，manifest 记录分母与
     prereg 摘要，stats 族非空。"""
     out = tmp_path / "figures"
-    manifest = make_figures(
-        runs_source, out, prereg_path=PKG_ROOT / "config" / "metrics_prereg.yaml"
+    # e2e 不呈现层过滤（场景集随 fixture 走）：真 prereg 去掉 protection_scenes
+    # 键写副本——过滤行为由 test_filter_protection_scenes 专项覆盖。
+    doc = yaml.safe_load(
+        (PKG_ROOT / "config" / "metrics_prereg.yaml").read_text(encoding="utf-8")
     )
+    doc.pop("protection_scenes", None)
+    prereg_copy = tmp_path / "prereg_nofilter.yaml"
+    prereg_copy.write_text(yaml.safe_dump(doc), encoding="utf-8")
+    manifest = make_figures(runs_source, out, prereg_path=prereg_copy)
     expected = [
         "adaptation_curves.png",
         "adaptation_curves.pdf",
@@ -322,3 +329,22 @@ def test_make_figures_end_to_end_artifacts(runs_source: Path, tmp_path: Path) ->
     assert csv_lines[0].startswith("arm_a,arm_b") and len(csv_lines) == 1 + len(
         stats["pairs"]
     )
+
+
+def test_filter_protection_scenes() -> None:
+    """protection_scenes 键缺席 → 原样返回（同一对象）；在 → 仅保留列出场景
+    （"Topo.gml@rate" 形式解析，未列出场景整条丢弃）。"""
+    records = [
+        {"topo": "Abilene.gml", "rate": 500, "arm": "A1"},
+        {"topo": "Claranet.gml", "rate": 500, "arm": "A1"},
+        {"topo": "Claranet.gml", "rate": 1500, "arm": "A2"},
+    ]
+    assert _filter_protection(records, {}) is records
+    assert _filter_protection(records, {"protection_scenes": None}) is records
+    kept = _filter_protection(
+        records, {"protection_scenes": ["Abilene.gml@500", "Claranet.gml@1500"]}
+    )
+    assert [(r["topo"], r["rate"]) for r in kept] == [
+        ("Abilene.gml", 500),
+        ("Claranet.gml", 1500),
+    ]
