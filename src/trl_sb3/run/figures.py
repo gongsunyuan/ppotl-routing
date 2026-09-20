@@ -478,16 +478,26 @@ def _scene_grid(scenes: list[tuple[str, int]]) -> tuple[Figure, Any]:
 
 def build_delta_ospf_figure(records: list[dict[str, Any]]) -> Figure:
     """图 3（纯函数，EXPLORATORY）：逐场景学习臂 Δ-vs-OSPF 柱（种子均值，误差棒
-    = 种子 SD），水平零线 = OSPF 平价（正值 = 超 OSPF）。缺 OSPF 行或学习臂
-    final 的场景不入图；全场景降级 → ValueError（调用方跳过整图）。"""
+    = 种子 SD），水平零线 = OSPF 平价（正值 = 超 OSPF）。单行条带版式（论文
+    一行四格，sharey 跨场景同尺度）。缺 OSPF 行或学习臂 final 的场景不入图；
+    全场景降级 → ValueError（调用方跳过整图）。"""
     stats = delta_ospf_stats(records)
     if not stats:
         raise ValueError(
             "Δ-vs-OSPF 无可画场景：缺 OSPF 行或学习臂 final（叙事增项，EXPLORATORY）"
         )
     scenes = sorted(stats)
-    fig, axes = _scene_grid(scenes)
-    for ax, scene in zip(axes.flat, scenes):
+    # 单行条带：2.6in/格设计幅面，跨栏全宽渲染（≈72% 缩放）后有效字号仍可读；
+    # sharey = Δ 同量纲跨场景可比（LF 的正增益与 Abilene 的负代价同尺度呈现）
+    fig, axes = plt.subplots(
+        1,
+        len(scenes),
+        figsize=(2.6 * len(scenes), 2.7),
+        squeeze=False,
+        sharey=True,
+        constrained_layout=True,
+    )
+    for index, (ax, scene) in enumerate(zip(axes.flat, scenes, strict=True)):
         arm_stats = stats[scene]
         arms = sorted(arm_stats, key=_bar_order)
         positions = range(len(arms))
@@ -501,11 +511,10 @@ def build_delta_ospf_figure(records: list[dict[str, Any]]) -> Figure:
             linewidth=0.4,
         )
         ax.axhline(0.0, color="0.15", linewidth=1.0)  # OSPF parity
-        ax.set_xticks(list(positions), arms, rotation=45, ha="right", fontsize=8)
-        ax.set_title(_scene_text(scene), fontsize=11)
-        ax.set_ylabel(
-            "Δ final r_mean vs OSPF (seed mean ± SD)" if len(scenes) <= 2 else None
-        )
+        ax.set_xticks(list(positions), arms, rotation=45, ha="right", fontsize=9)
+        ax.set_title(_scene_text(scene), fontsize=12)
+        if index == 0:
+            ax.set_ylabel("Δ final r_mean vs OSPF (seed mean ± SD)", fontsize=11)
     fig.suptitle(
         "Δ vs OSPF by arm (final r_mean, seed mean ± SD; exploratory)", fontsize=13
     )
