@@ -461,22 +461,6 @@ def generalization_gap_stats(
     return stats
 
 
-def _scene_grid(scenes: list[tuple[str, int]]) -> tuple[Figure, Any]:
-    """逐场景子图网格（1-2 列自适应，多余轴隐藏）；复用图 2 版式。"""
-    ncols = min(len(scenes), 2)
-    nrows = -(-len(scenes) // ncols)
-    fig, axes = plt.subplots(
-        nrows,
-        ncols,
-        figsize=(6.4 * ncols, 4.2 * nrows),
-        squeeze=False,
-        constrained_layout=True,
-    )
-    for ax in axes.flat[len(scenes) :]:
-        ax.set_visible(False)
-    return fig, axes
-
-
 def build_delta_ospf_figure(records: list[dict[str, Any]]) -> Figure:
     """图 3（纯函数，EXPLORATORY）：逐场景学习臂 Δ-vs-OSPF 柱（种子均值，误差棒
     = 种子 SD），水平零线 = OSPF 平价（正值 = 超 OSPF）。单行条带版式（论文
@@ -524,16 +508,26 @@ def build_delta_ospf_figure(records: list[dict[str, Any]]) -> Figure:
 
 def build_generalization_gap_figure(records: list[dict[str, Any]]) -> Figure:
     """图 4（纯函数，EXPLORATORY）：逐场景 A0 vs 适应臂 final 柱（种子均值 ±
-    种子 SD 误差棒），子图内标注同种子配对差距（shared seeds）。缺 A0 行、无
-    学习臂 final 或无共享种子的场景不入图；全场景降级 → ValueError。"""
+    种子 SD 误差棒），子图内标注同种子配对差距（shared seeds）。单行条带版式
+    （论文一行四格，sharey 跨场景同尺度）。缺 A0 行、无学习臂 final 或无共享
+    种子的场景不入图；全场景降级 → ValueError。"""
     stats = generalization_gap_stats(records)
     if not stats:
         raise ValueError(
             "泛化差距无可画场景：缺 A0 行或学习臂 final（叙事增项，EXPLORATORY）"
         )
     scenes = sorted(stats)
-    fig, axes = _scene_grid(scenes)
-    for ax, scene in zip(axes.flat, scenes):
+    # 单行条带：2.6in/格设计幅面（与 Δ-vs-OSPF 条带同配方）；sharey = final
+    # 同量纲跨场景可比（Abilene 的 0.78 高水位与 Surge 的 0.35 饱和带同轴呈现）
+    fig, axes = plt.subplots(
+        1,
+        len(scenes),
+        figsize=(2.6 * len(scenes), 2.7),
+        squeeze=False,
+        sharey=True,
+        constrained_layout=True,
+    )
+    for index, (ax, scene) in enumerate(zip(axes.flat, scenes, strict=True)):
         row = stats[scene]
         labels = ["A0 (zero-shot)", row["arm"]]
         heights = [row["a0"]["mean"], row["adapted"]["mean"]]
@@ -547,9 +541,10 @@ def build_generalization_gap_figure(records: list[dict[str, Any]]) -> Figure:
             edgecolor="black",
             linewidth=0.4,
         )
-        ax.set_xticks([0, 1], labels)
-        ax.set_title(_scene_text(scene), fontsize=11)
-        ax.set_ylabel("Final r_mean (seed mean ± SD)" if len(scenes) <= 2 else None)
+        ax.set_xticks([0, 1], labels, fontsize=9)
+        ax.set_title(_scene_text(scene), fontsize=12)
+        if index == 0:
+            ax.set_ylabel("Final r_mean (seed mean ± SD)", fontsize=11)
         ax.text(
             0.02,
             0.95,
@@ -557,7 +552,7 @@ def build_generalization_gap_figure(records: list[dict[str, Any]]) -> Figure:
             transform=ax.transAxes,
             ha="left",
             va="top",
-            fontsize=8,
+            fontsize=7,
         )
     fig.suptitle(
         "Generalization gap: A0 vs adapted arm (final r_mean; exploratory)", fontsize=13
