@@ -77,8 +77,8 @@ def build_figure(ours: list[Path], baseline: list[Path], out_dir: Path) -> list[
     for ax, (title, key) in zip(
         axes[:2],
         (
-            ("Actor loss (policy gradient)", "policy_gradient_loss"),
-            ("Critic loss (value)", "value_loss"),
+            ("|Actor loss| (policy gradient)", "policy_gradient_loss"),
+            ("|Critic loss| (value)", "value_loss"),
         ),
         strict=True,
     ):
@@ -94,7 +94,10 @@ def build_figure(ours: list[Path], baseline: list[Path], out_dir: Path) -> list[
                 "PPO (scratch, no PBRS)",
             ),
         ):
-            smoothed = [_smooth(losses_i[key], SMOOTH_WINDOW) for losses_i in losses]
+            # 绝对值先行再平滑：策略梯度损失约八成为负，直接上对数轴会整段不可见
+            smoothed = [
+                _smooth(np.abs(losses_i[key]), SMOOTH_WINDOW) for losses_i in losses
+            ]
             xs = [
                 losses_i["update"][: s.size]
                 for losses_i, s in zip(losses, smoothed, strict=True)
