@@ -249,7 +249,8 @@ def build_adaptation_figure(
     axes.flat[0].set_ylim(-0.05, 1.05)
     fig.supxlabel("Episode")
     fig.supylabel("Normalized r_mean (per-scene max across runs)")
-    fig.suptitle("Adaptation curves by arm (seed mean ±95% CI)", fontsize=13)
+    # 场景图例置顶（outside upper center）；不再叠 suptitle——constrained layout
+    # 不自动堆叠二者，且与底部 supxlabel("Episode") 同带会重叠（实测复现）
     handles = [
         Line2D([0], [0], color=colors[s], linewidth=1.5, label=_scene_text(s))
         for s in scenes
@@ -275,7 +276,7 @@ def build_adaptation_figure(
     )
     fig.legend(
         handles=handles,
-        loc="outside lower center",
+        loc="outside upper center",
         ncol=min(len(handles), 9),
         frameon=False,
     )
