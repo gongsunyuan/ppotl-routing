@@ -174,14 +174,17 @@ def build_adaptation_figure(
 
     τ 取 compute_table 行（episode 轴原量纲，不归一）：全删失 → 删失窗口 W
     边界虚线 + 子图标注 censored；未删失 → τ 均值虚线。OSPF/ECMP/LB/RR 逐
-    场景水平参考线（灰点线）。多场景 → 同子图逐场景多色曲线。
+    场景水平参考线（各自专属色点线）。多场景 → 同子图逐场景多色曲线。
     """
     scenes = sorted(
         {_scene_of(r) for r in records_norm if r["arm"] not in NON_SCORING_ARMS}
     )
     arms = _ordered_arms(records_norm)
-    colors = dict(
-        zip(scenes, plt.rcParams["axes.prop_cycle"].by_key()["color"], strict=False)
+    cycle = plt.rcParams["axes.prop_cycle"].by_key()["color"]
+    colors = dict(zip(scenes, cycle, strict=False))
+    # 静态基线专属色（色环 4-7 号，与场景曲线 0-3 号错开）
+    ref_colors: dict[str, str] = dict(
+        zip(_REF_ARMS, cycle[4 : 4 + len(_REF_ARMS)], strict=True)
     )
     rows = {(row["arm"], row["topo"], row["rate"]): row for row in table}
     fig, axes = plt.subplots(
@@ -226,14 +229,19 @@ def build_adaptation_figure(
                 all_censored = row["tau"]["n_censored"] >= row["n_seeds"]
                 tau_x = float(window if all_censored else row["tau"]["mean"])
                 ax.axvline(
-                    tau_x, color=colors[scene], linestyle="--", linewidth=1.2, alpha=0.8
+                    tau_x,
+                    color=colors[scene],
+                    linestyle="--",
+                    linewidth=1.2,
                 )
                 xmax = max(xmax, tau_x)
         for scene in scenes:
             for ref in _REF_ARMS:
                 value = _final_mean(records_norm, ref, scene)
                 if value is not None:
-                    ax.axhline(value, color="0.45", linestyle=":", linewidth=1.0)
+                    ax.axhline(
+                        value, color=ref_colors[ref], linestyle=":", linewidth=1.2
+                    )
         ax.set_xlim(0, xmax * 1.03)
         ax.set_title(arm, fontsize=11)
         if _censored_rows(rows, arm, scenes):
@@ -251,33 +259,34 @@ def build_adaptation_figure(
     fig.supylabel("Normalized r_mean (per-scene max across runs)")
     # 场景图例置顶（outside upper center）；不再叠 suptitle——constrained layout
     # 不自动堆叠二者，且与底部 supxlabel("Episode") 同带会重叠（实测复现）
-    handles = [
-        Line2D([0], [0], color=colors[s], linewidth=1.5, label=_scene_text(s))
+    # 场景条目 = 双样张（同色：实线 = 适应曲线、虚线 = τ 竖线），τ 图例随色各一份；
+    # 静态基线 4 条独立彩色条目。标签文字不变，纯图形编码。
+    handles: list[Any] = [
+        (
+            Line2D([0], [0], color=colors[s], linewidth=1.5),
+            Line2D([0], [0], color=colors[s], linestyle="--", linewidth=1.5),
+        )
         for s in scenes
     ]
+    labels = [_scene_text(s) for s in scenes]
     if len(scenes) == 1:
-        handles += [
-            Line2D([0], [0], color="0.45", linestyle=":", label=ref)
+        present = [
+            ref
             for ref in _REF_ARMS
             if _final_mean(records_norm, ref, scenes[0]) is not None
         ]
     else:
-        handles.append(
-            Line2D([0], [0], color="0.45", linestyle=":", label="OSPF/ECMP/LB/RR")
-        )
-    handles.append(
-        Line2D(
-            [0],
-            [0],
-            color="0.15",
-            linestyle="--",
-            label=f"τ (at W={window} if censored)",
-        )
-    )
+        present = list(_REF_ARMS)
+    handles += [
+        Line2D([0], [0], color=ref_colors[ref], linestyle=":", linewidth=1.5)
+        for ref in present
+    ]
+    labels += present
     fig.legend(
         handles=handles,
+        labels=labels,
         loc="outside upper center",
-        ncol=min(len(handles), 9),
+        ncol=min(len(labels), 9),
         frameon=False,
     )
     return fig
