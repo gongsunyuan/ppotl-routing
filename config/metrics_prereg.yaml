@@ -8,9 +8,10 @@
 # —— meta：预注册身份与版本留痕（2026-08-31 随叙事增项注册引入）——
 meta:
   status: pre_registered_before_main_table_generation  # 叙事增项先于主表余量数据生成注册（计划 §5）
-  date: "2026-09-20"                                   # 引号防 YAML date 类型化
-  version: 6
+  date: "2026-09-22"                                   # 引号防 YAML date 类型化
+  version: 7
   change_log:
+    - {version: 7, date: "2026-09-22", change: "呈现层叙事切换（导师修订版 A5 主线，用户裁决）：泛化差距面板适应臂偏好 A6→A5（A5 在场取 A5，缺席回退 final 最优学习臂不变）；负载扫双工作点图 1500 组方法柱 A6→A5（标签 A5 pretrain+PBRS (PPO-TL)）。纯呈现层——θ/W/k/α、统计族与主表数据不动，stats.csv 复验逐字节不变"}
     - {version: 6, date: "2026-09-20", change: "呈现层场景过滤：新增 protection_scenes 键（四保护场景），make_figures 出图前按其过滤 records——fig3 收敛对照（A1@Claranet@500）与负载扫基线行不再混入论文图与 manifest 分母；θ/W/k/α、统计族与主表口径不动（被滤场景本无配对比较，stats.csv 复验逐字节不变）；键缺席时不过滤（测试/冒烟路径优雅降级）"}
     - {version: 5, date: "2026-09-15", change: "最优检查点机制立项（DEVIATIONS #18，用户裁决）：final 语义改为峰值检查点评估（周期评估严格大于更新、并列首见），final_last 留档旧末态口径；血统 ckpt 同存峰值快照；新增 losses.csv 训练损失记录（纯附加，不进指标族）。旧口径 v4 产物整体归档 runs_final_ckpt_v1/ 不删除，v5 批换目录全量重跑；θ/W/k/α 与统计口径不动（θ 输入端的 OSPF 行为确定性基线不受影响）"}
     - {version: 4, date: "2026-09-09", change: "源域切换立项（DEVIATIONS #17，D6/D7/D8 用户裁决）：保护对象改为 4 新目标场景（Claranet_failure@500 / Abilene@500 / NFSCNET@500 / Claranet@1500，随源 CERNET→Claranet 重定义）；load_sweep 主拓扑解释改为 Claranet.gml（预训练源拓扑随切换）；D7 探针 6 搭配不并入主表、D8 @300 轻载不进主表（维持搁置）；旧 287 维协议预构建网格作废。θ/W/k/α 与 v3 一致不动"}
@@ -84,6 +85,6 @@ narrative_extras:
     definition: >-
       泛化差距 = A0 final vs 同种子适应臂 final（逐共享种子配对差 adapted − A0）
     panel: >-
-      make_figures generalization_gap 图，逐场景 A0 vs 适应臂 final（A6 在场取
-      A6，否则取该场景 final 种子均值最优学习臂）；缺 A0 行或无学习臂 final
-      的场景跳过（优雅降级）
+      make_figures generalization_gap 图，逐场景 A0 vs 适应臂 final（A5 在场取
+      A5——v7 叙事切换后的方法主角臂；否则取该场景 final 种子均值最优学习臂）；
+      缺 A0 行或无学习臂 final 的场景跳过（优雅降级）

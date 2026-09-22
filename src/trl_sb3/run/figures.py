@@ -435,7 +435,7 @@ def generalization_gap_stats(
     records: list[dict[str, Any]],
 ) -> dict[tuple[str, int], dict[str, Any]]:
     """逐场景泛化差距统计（图 4 数据，EXPLORATORY）：A0 final vs 同种子适应臂
-    final。适应臂 = A6 在场取 A6（全方法臂，计划 §5 A6 先行波口径），否则取该
+    final。适应臂 = A5 在场取 A5（方法主角臂，prereg v7 叙事切换），否则取该
     场景 final 种子均值最优学习臂；paired_gap = 逐共享种子 (adapted − A0) 均值。
     缺 A0 final、无学习臂 final 或无共享种子的场景跳过（优雅降级）。"""
     stats: dict[tuple[str, int], dict[str, Any]] = {}
@@ -450,8 +450,8 @@ def generalization_gap_stats(
         }
         if not a0_finals or not candidates:
             continue
-        if "A6" in candidates:
-            arm = "A6"
+        if "A5" in candidates:
+            arm = "A5"
         else:  # 最优适应臂：种子均值并列时字典序首者（确定性）
             arm = min(
                 candidates, key=lambda a: (-mean(list(candidates[a].values())), a)

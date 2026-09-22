@@ -1,9 +1,9 @@
-"""论文 Fig5 替换图：Claranet 基线负载响应 + 方法参考点。
+"""论文 Fig5 替换图：源域工作点 vs 3× 突增的分组柱状对比。
 
-数据源：runs/ 基线行（OSPF/ECMP/LB/RR × 速率 250-2000，预注册
-narrative_extras.load_sweep，零参数评估）与学习行 eval.json final。
-y 轴为原始 r_mean_mean——跨速率可比（场景内归一分母随速率变化，不适用）。
-方法参考点：源域 500 = 预训练峰值（10 种子），1500 = 适应臂终评（10 种子）。
+数据源：runs/ 基线行（OSPF/ECMP/LB/RR，零参数评估）与学习行 eval.json
+final。仅呈现方法实际训练过的两个负载档（500 = 源域预训练、1500 = 突增
+适应）；250-2000 全档基线测绘行保留在 runs/ 并打印到日志供背景引用，
+但不上图。y 轴为原始 r_mean_mean（跨速率可比）。
 
 用法：
     python -m trl_sb3.run.fig5_load_sweep --runs runs --out-dir figures_main
@@ -21,16 +21,25 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib.patches import Rectangle
 
-RATES = (250, 500, 1000, 1500, 2000)
+RATES_SWEEP = (250, 500, 1000, 1500, 2000)  # runs 数据完整性校验与日志背景
+RATES_PLOTTED = (500, 1500)
 BASELINE_ARMS = ("OSPF", "ECMP", "LB", "RR")
 TOPO = "Claranet.gml"
-METHOD_ARMS_AT_1500 = ("A2", "A6")
-FloatArray = np.ndarray[tuple[int, ...], np.dtype[np.float64]]
+METHOD_BARS: dict[int, tuple[tuple[str, str], ...]] = {
+    500: (("pretrain", "PPO-TL pretrain (peak)"),),
+    1500: (
+        ("A1", "A1 scratch"),
+        ("A2", "A2 pretrain+FT"),
+        ("A5", "A5 pretrain+PBRS (PPO-TL)"),
+    ),
+}
+GROUP_LABELS = {500: "500 (source)", 1500: r"1500 ($3\times$ surge)"}
 
 
 def _records(runs: Path) -> list[dict[str, Any]]:
-    """runs/ → Claranet 全部 DONE 行（manifest 字段 + eval final/best）。"""
+    """runs/ → Claranet 全部 DONE 行（manifest 字段 + eval final）。"""
     out: list[dict[str, Any]] = []
     for run in sorted(runs.iterdir()):
         manifest_path, eval_path = run / "manifest.json", run / "eval.json"
@@ -42,30 +51,28 @@ def _records(runs: Path) -> list[dict[str, Any]]:
         if manifest.get("topo") != TOPO:
             continue
         ev = json.loads(eval_path.read_text(encoding="utf-8"))
-        out.append({**manifest, "final": ev["final"], "best": ev.get("best")})
+        out.append({**manifest, "final": ev["final"]})
     return out
 
 
-def _baseline_series(
-    records: list[dict[str, Any]],
-) -> dict[str, FloatArray]:
-    """逐基线臂 5 档速率的 final 值（缺任一档 → ValueError，宁可失败）。"""
-    series: dict[str, FloatArray] = {}
+def _baseline_by_rate(records: list[dict[str, Any]]) -> dict[str, dict[int, float]]:
+    """逐基线臂 速率→final 值（扫档缺行 → ValueError，宁可失败）。"""
+    series: dict[str, dict[int, float]] = {}
     for arm in BASELINE_ARMS:
         by_rate = {
             r["rate"]: r["final"]["r_mean_mean"] for r in records if r["arm"] == arm
         }
-        missing = [rate for rate in RATES if rate not in by_rate]
+        missing = [rate for rate in RATES_SWEEP if rate not in by_rate]
         if missing:
             raise ValueError(f"基线 {arm} 缺速率档 {missing}（负载扫行不全）")
-        series[arm] = np.array([by_rate[rate] for rate in RATES], dtype=np.float64)
+        series[arm] = by_rate
     return series
 
 
 def _method_point(
     records: list[dict[str, Any]], arm: str, rate: int
 ) -> tuple[float, float]:
-    """方法参考点：(10 种子 final 均值, SD)。pretrain 行 = 源域峰值检查点评估。"""
+    """方法柱：(种子 final 均值, SD)。pretrain 行 = 源域峰值检查点评估。"""
     values = [
         r["final"]["r_mean_mean"]
         for r in records
@@ -78,56 +85,70 @@ def _method_point(
 
 
 def build_figure(runs: Path, out_dir: Path) -> list[Path]:
-    """单面板负载响应图：4 基线折线 + 方法参考点（误差棒 = 种子 SD），PNG+PDF。"""
+    """双工作点分组柱状图：基线（确定性，无误差棒）+ 方法臂（SD 误差棒）。"""
     records = _records(runs)
-    series = _baseline_series(records)
+    baselines = _baseline_by_rate(records)
     points = {
-        ("pretrain", 500): _method_point(records, "pretrain", 500),
-        **{
-            (arm, 1500): _method_point(records, arm, 1500)
-            for arm in METHOD_ARMS_AT_1500
-        },
+        (arm, rate): _method_point(records, arm, rate)
+        for rate, bars in METHOD_BARS.items()
+        for arm, _ in bars
     }
     fig, ax = plt.subplots(figsize=(8.2, 5.2), constrained_layout=True)
     colors = plt.rcParams["axes.prop_cycle"].by_key()["color"]
-    for arm, color in zip(BASELINE_ARMS, colors[:4], strict=True):
-        ax.plot(RATES, series[arm], marker="o", color=color, label=arm)
-    method_specs = (
-        (("pretrain", 500), "*", "PPO-TL source peak (pretrain@500)"),
-        (("A2", 1500), "D", "A2 pretrain+finetune@1500"),
-        (("A6", 1500), "s", "A6 full method@1500"),
-    )
-    for (key, marker, label), color in zip(method_specs, colors[4:7], strict=True):
-        mean, sd = points[key]
-        rate = key[1]
-        ax.errorbar(
-            [rate],
-            [mean],
-            yerr=[sd],
-            marker=marker,
-            markersize=11,
-            color=color,
-            linewidth=0,
-            elinewidth=1.4,
-            capsize=4,
-            label=f"{label} (n=10)",
-        )
-    ax.set_xticks(RATES)
+    baseline_color: dict[str, str] = dict(zip(BASELINE_ARMS, colors[:4], strict=True))
+    method_color: dict[str, str] = {
+        arm: colors[4 + i]
+        for i, arm in enumerate(arm for bars in METHOD_BARS.values() for arm, _ in bars)
+    }
+    bar_width, group_span = 0.09, 0.72
+    for group_index, rate in enumerate(RATES_PLOTTED):
+        entries: list[tuple[str, float, float | None]] = [
+            (arm, baselines[arm][rate], None) for arm in BASELINE_ARMS
+        ]
+        entries += [
+            (arm, points[(arm, rate)][0], points[(arm, rate)][1])
+            for arm, _ in METHOD_BARS[rate]
+        ]
+        n = len(entries)
+        xs = np.linspace(group_index - group_span / 2, group_index + group_span / 2, n)
+        for x, (arm, mean, sd) in zip(xs, entries, strict=True):
+            color = baseline_color.get(arm, method_color.get(arm))
+            assert color is not None  # 未登记的臂不上图
+            ax.bar(
+                x,
+                mean,
+                width=bar_width,
+                color=color,
+                yerr=sd,
+                error_kw={"elinewidth": 1.4, "capsize": 4},
+            )
+    handles = [
+        Rectangle((0, 0), 1, 1, color=baseline_color[arm]) for arm in BASELINE_ARMS
+    ] + [Rectangle((0, 0), 1, 1, color=method_color[arm]) for arm in method_color]
+    labels = list(BASELINE_ARMS) + [
+        label for bars in METHOD_BARS.values() for _, label in bars
+    ]
+    ax.legend(handles, labels, frameon=False, fontsize=8, ncol=2)
+    ax.set_xticks(range(len(RATES_PLOTTED)))
+    ax.set_xticklabels([GROUP_LABELS[rate] for rate in RATES_PLOTTED])
+    ax.set_xlim(-0.55, len(RATES_PLOTTED) - 0.45)
     ax.set_xlabel("Average traffic rate (packets/s)")
     ax.set_ylabel("Greedy eval reward (raw r_mean)")
-    ax.set_title("Baseline load response on Claranet with method reference points")
-    ax.grid(alpha=0.3)
-    ax.legend(frameon=False, fontsize=9)
+    ax.set_title("Source operating point vs. traffic surge on Claranet")
+    ax.grid(alpha=0.3, axis="y")
     out_paths: list[Path] = []
     for ext in ("png", "pdf"):
         path = out_dir / f"fig5_load_sweep.{ext}"
         fig.savefig(path, dpi=200)
         out_paths.append(path)
     plt.close(fig)
-    for arm, values in series.items():
-        print(f"[fig5] {arm}: " + " ".join(f"{v:.4f}" for v in values))
-    for key, (mean, sd) in points.items():
-        print(f"[fig5] method {key[0]}@{key[1]}: {mean:.4f} ± {sd:.4f}")
+    for rate in RATES_SWEEP:
+        print(
+            f"[fig5] sweep@{rate}: "
+            + " ".join(f"{arm}={baselines[arm][rate]:.4f}" for arm in BASELINE_ARMS)
+        )
+    for (arm, rate), (mean, sd) in points.items():
+        print(f"[fig5] method {arm}@{rate}: {mean:.4f} ± {sd:.4f}")
     return out_paths
 
 

@@ -159,25 +159,25 @@ def test_delta_ospf_stats_finite_and_skips_unqualified_scenes() -> None:
     )
 
 
-def test_generalization_gap_stats_prefers_a6_and_pairs_shared_seeds() -> None:
-    """Given 场景 A0（种子 0/1）+ A6（种子 0/1）+ 均值更高的 A1；When
-    generalization_gap_stats；Then 适应臂取 A6（在场优先）；paired_gap=逐共享种子
-    （A6−A0）均值；缺 A0 行的场景跳过；A6 缺席时取 final 最优学习臂。"""
+def test_generalization_gap_stats_prefers_a5_and_pairs_shared_seeds() -> None:
+    """Given 场景 A0（种子 0/1）+ A5（种子 0/1）+ 均值更高的 A1；When
+    generalization_gap_stats；Then 适应臂取 A5（在场优先）；paired_gap=逐共享种子
+    （A5−A0）均值；缺 A0 行的场景跳过；A5 缺席时取 final 最优学习臂。"""
     records = [
         _record("A0", 0, [], 0.20),
         _record("A0", 1, [], 0.22),
-        _record("A6", 0, _curve(0.1, 0.50), 0.50),
-        _record("A6", 1, _curve(0.1, 0.54), 0.54),
+        _record("A5", 0, _curve(0.1, 0.50), 0.50),
+        _record("A5", 1, _curve(0.1, 0.54), 0.54),
         _record("A1", 0, _curve(0.1, 0.80), 0.80),
-        _record("A6", 0, _curve(0.1, 0.50), 0.50, topo="NFSCNET.gml"),  # 缺 A0 → 跳过
-        _record("A0", 0, [], 0.10, topo="CERNET.gml"),  # A6 缺席 → 适应臂 = 最优 A1
+        _record("A5", 0, _curve(0.1, 0.50), 0.50, topo="NFSCNET.gml"),  # 缺 A0 → 跳过
+        _record("A0", 0, [], 0.10, topo="CERNET.gml"),  # A5 缺席 → 适应臂 = 最优 A1
         _record("A1", 0, _curve(0.1, 0.40), 0.40, topo="CERNET.gml"),
         _record("A2", 0, _curve(0.1, 0.30), 0.30, topo="CERNET.gml"),
     ]
     stats = generalization_gap_stats(records)
     assert set(stats) == {("Abilene.gml", 500), ("CERNET.gml", 500)}
     abilene = stats[("Abilene.gml", 500)]
-    assert abilene["arm"] == "A6"  # A6 在场优先，虽 A1 final 均值更高
+    assert abilene["arm"] == "A5"  # A5 在场优先，虽 A1 final 均值更高
     assert abilene["shared_seeds"] == [0, 1]
     assert abilene["paired_gap"] == pytest.approx(((0.50 - 0.20) + (0.54 - 0.22)) / 2)
     assert all(

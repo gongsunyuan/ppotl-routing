@@ -207,7 +207,8 @@ def test_prereg_overlay_mapping_and_concurrency_placeholder() -> None:
 
 
 def test_metrics_prereg_narrative_extras_registered_and_version_bumped() -> None:
-    """Given metrics_prereg.yaml;When safe_load;Then meta.version 升到 6(v6=
+    """Given metrics_prereg.yaml;When safe_load;Then meta.version 升到 7(v7=
+    呈现层叙事切换——泛化差距适应臂偏好 A6→A5、负载扫方法柱 A6→A5;v6=
     protection_scenes 呈现层过滤——make_figures 仅呈现四保护场景、θ/统计不动;
     v5=最优检查点机制立项——final 改峰值评估、final_last 留档旧口径、losses.csv
     附加;v4=源域切换 D6/D7/D8;v3=GATE-2 theta=null 终局;v2=叙事增项;v1=初始)
@@ -216,12 +217,13 @@ def test_metrics_prereg_narrative_extras_registered_and_version_bumped() -> None
     标签(计划 §5 主表余量);theta 锁死 null(逐场景 theta_rule 推导即终局口径)。"""
     doc = _load_metrics()
     meta = doc["meta"]
-    assert meta["version"] == 6
-    assert [entry["version"] for entry in meta["change_log"]] == [6, 5, 4, 3, 2, 1]
+    assert meta["version"] == 7
+    assert [entry["version"] for entry in meta["change_log"]] == [7, 6, 5, 4, 3, 2, 1]
     assert meta["status"] == "pre_registered_before_main_table_generation"
-    # v6 留痕须落呈现层过滤：protection_scenes 键 + 非指标口径声明
-    assert "protection_scenes" in meta["change_log"][0]["change"]
+    # v7 留痕须落呈现层叙事切换（A5 偏好）；v6 条目仍含 protection_scenes
+    assert "A5" in meta["change_log"][0]["change"]
     assert "呈现层" in meta["change_log"][0]["change"]
+    assert "protection_scenes" in meta["change_log"][1]["change"]
     assert {str(s) for s in doc["protection_scenes"]} == {
         "Claranet_failure.gml@500",
         "Abilene.gml@500",
@@ -229,21 +231,21 @@ def test_metrics_prereg_narrative_extras_registered_and_version_bumped() -> None
         "Claranet.gml@1500",
     }
     # v5 留痕须落最优检查点机制:final 语义变更 + 归档不删
-    assert "最优检查点" in meta["change_log"][1]["change"]
-    assert "final_last" in meta["change_log"][1]["change"]
-    assert "runs_final_ckpt_v1" in meta["change_log"][1]["change"]
+    assert "最优检查点" in meta["change_log"][2]["change"]
+    assert "final_last" in meta["change_log"][2]["change"]
+    assert "runs_final_ckpt_v1" in meta["change_log"][2]["change"]
     assert doc["theta"] is None  # v3 裁决:null 即终局,此后禁回填全局 float
     # v4 留痕须落源域切换裁决:保护对象重定义 + D6/D7/D8
-    assert "源域切换" in meta["change_log"][2]["change"]
-    assert "D6" in meta["change_log"][2]["change"]
-    assert "Claranet_failure" in meta["change_log"][2]["change"]
+    assert "源域切换" in meta["change_log"][3]["change"]
+    assert "D6" in meta["change_log"][3]["change"]
+    assert "Claranet_failure" in meta["change_log"][3]["change"]
     # v3 留痕须落 GATE-2 裁决:theta=null 终局 + 种子数缺省
-    assert "GATE-2" in meta["change_log"][3]["change"]
-    assert "终局" in meta["change_log"][3]["change"]
-    assert "n=10" in meta["change_log"][3]["change"]
+    assert "GATE-2" in meta["change_log"][4]["change"]
+    assert "终局" in meta["change_log"][4]["change"]
+    assert "n=10" in meta["change_log"][4]["change"]
     # v2 留痕须点名三项增项
-    assert "叙事增项" in meta["change_log"][4]["change"]
-    assert "EXPLORATORY" in meta["change_log"][4]["change"]
+    assert "叙事增项" in meta["change_log"][5]["change"]
+    assert "EXPLORATORY" in meta["change_log"][5]["change"]
 
     extras = doc["narrative_extras"]
     assert extras["label"] == "exploratory"
@@ -266,4 +268,4 @@ def test_metrics_prereg_narrative_extras_registered_and_version_bumped() -> None
     assert "r_mean_mean" in extras["delta_vs_ospf"]["definition"]
     assert "OSPF" in extras["delta_vs_ospf"]["panel"]
     assert "A0" in extras["generalization_gap"]["definition"]
-    assert "A6" in extras["generalization_gap"]["panel"]
+    assert "A5" in extras["generalization_gap"]["panel"]  # v7 叙事切换后的偏好臂
