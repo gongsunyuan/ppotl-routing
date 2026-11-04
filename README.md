@@ -1,79 +1,97 @@
-# experiments — TRL routing ablation package
+# Adaptive Intelligent Routing Based on Transfer Reinforcement Learning in Dynamic Networks
 
-Clean-room rebuild of the TRL routing experiments on Stable-Baselines3.
-Old code, old `.venv` and old git history were purged on purpose; this tree is
-the single source of truth from M-0 onward.
+## Experiment Overview
 
-## Environment
+This repository contains the experimental framework, configurations, and analysis artifacts for a controlled study of transfer reinforcement learning (TRL) in dynamic network routing. The study examines a method that combines source-domain pretraining, representation freezing, and potential-based reward shaping (PBRS), and asks whether each component provides an independent benefit.
 
-All commands must use this interpreter (global python is CPU-only torch):
+The original routing environment was rebuilt with Gymnasium and Stable-Baselines3. The experimental framework adds deterministic run identities, paired random seeds, fixed evaluation streams, preregistered metrics, and explicit records of deviations from the legacy implementation.
 
-```powershell
-$py = .venv\Scripts\python.exe
-```
+The study addresses four questions:
 
-Direct dependency versions are pinned in `requirements.lock` (`==` only).
-Reproduce the venv with the command sequence in that file's header comment.
+- Does source-domain pretraining improve target-domain performance?
+- Does freezing pretrained decision layers help during adaptation?
+- Does PBRS improve learning or final routing performance?
+- Can the observed effects be explained by the total training budget rather than transfer learning?
 
-## Package
+## Routing Task and Method
 
-`trl_sb3` is a src-layout package installed editable into the venv:
+The routing task models a network in which every node repeatedly selects one of three candidate paths for its own traffic. The objective is to reduce packet loss and delay while traffic conditions change. Links use finite-capacity M/M/1/K queueing models, and flow rates are perturbed during each episode to represent dynamic demand.
 
-```powershell
-uv pip install -e . --python .venv\Scripts\python.exe --no-deps
-```
+The learning agent uses Proximal Policy Optimization (PPO). A gated recurrent unit (GRU) encodes the node sequence of each candidate path, and the resulting path representations are combined with local node state before being passed to independent actor and critic networks. A node-fanout mapping presents the observations of all routers as synchronized learning samples with a shared network-level reward.
 
-`pyproject.toml` mirrors the 9 `==` pins from `requirements.lock` (torch is
-`2.13.0+cu126`, whose wheel lives at `https://download.pytorch.org/whl/cu126`,
-not PyPI). Always install with `--no-deps`: dependency management belongs to
-`requirements.lock`, not the build backend.
+This GRU path representation is an intentional change from the legacy 287-dimensional observation design. The change and its experimental consequences are documented in [`DEVIATIONS.md`](DEVIATIONS.md).
 
-Paper hyperparameters live only in `config/default.yaml` (`paper_defaults`
-section) — never hardcoded. `trl_sb3.common.config.load_config()` resolves that
-file from `__file__`, so it works from any cwd. Run identities are deterministic
-(no timestamps): see the factor-key convention in
-`trl_sb3/common/logging_utils.py`.
+## Experimental Design
 
-Every intentional deviation from the legacy code and the paper is recorded in
-`DEVIATIONS.md` with evidence and status.
+### Source and Target Scenarios
 
-## Layout
+The source policy is pretrained on the Claranet topology at an average traffic rate of 500 for 15,000 episodes. Target-domain adaptation uses 1,000 episodes. The equal-budget control trains from scratch for 16,000 episodes so that its total budget matches pretraining plus adaptation.
 
-- `src/trl_sb3/` — package, all modules landed: `env/` `policy/` `train/`
-  `eval/` `common/` `run/` (`common/` holds config + logging primitives).
-- `config/` — 5 yamls: `default.yaml` (paper_defaults), `grid_main.yaml`,
-  `grid_pilot.yaml`, `grid_smoke.yaml`, `metrics_prereg.yaml`.
-- `topologies/` — 12 GML topology files (6 networks x normal/_failure variants):
-  Abilene, CERNET, Claranet, Gridnet, NFSCNET, NSF. Copied verbatim from the
-  legacy `TRL_Routing/code` directory.
-- `tests/` — pytest suite (`python -m pytest tests -q`).
-- `requirements.lock` — exact direct-dependency pins (torch is +cu126).
-- `runs_smoke/` `figures_smoke/` — 2026-08-26 smoke-run evidence (34/34 DONE);
-  do not delete, use as reference.
-- `runs/` `ckpts/` — run artifacts (gitignored, created by the runner).
+Ten paired seeds are used. All transfer configurations associated with a given seed load the source checkpoint produced by that same seed, preventing source-model variation from being mixed with the component comparison.
 
-## Entrypoints
+| Target scenario | Topology | Average rate | Purpose |
+| --- | --- | ---: | --- |
+| Link failure | Claranet_failure | 500 | Test robustness when links are removed from the source topology |
+| Cross-topology transfer | Abilene | 500 | Test generalization to an 11-node topology |
+| Cross-topology transfer | NFSCNET | 500 | Test generalization to a smaller 9-node topology |
+| Increased traffic | Claranet | 1500 | Test adaptation when the source-topology traffic is tripled |
 
-```powershell
-& $py -m trl_sb3                                   # package self-check
-& $py -m trl_sb3.run sweep --grid config/grid_main.yaml
-& $py -m trl_sb3.run sweep --grid config/grid_main.yaml --dry-run
-& $py -m trl_sb3.run make_figures --runs runs --out figures
-& $py -m pytest tests -q
-```
+### Learning Configurations
 
-## AI context
+The three main factors are pretraining, decision-layer freezing, and PBRS. Additional controls isolate zero-shot transfer, random freezing, and total training budget.
 
-- `PLAN.md` — F1-F13 verified legacy semantics + design decisions (authority
-  for cross-checking implementation behavior).
-- `LEARNINGS.md` — API contracts and pitfalls (version matrix, SB3/Gymnasium quirks).
-- `ISSUES.md` — known quirks and open items (eval-episode dual-track, theta backfill).
-- `RUNBOOK.md` — execution manual for the GPU machine (env setup, pilot,
-  power analysis, main table).
+| Configuration | Description |
+| --- | --- |
+| A0: Zero-shot | Evaluate the pretrained source policy without target-domain training |
+| A1: Scratch | Train in the target domain without pretraining or PBRS |
+| A1b: Equal budget | Train from scratch with the combined pretraining and adaptation budget |
+| A2: Pretraining + fine-tuning | Adapt the pretrained policy without freezing or PBRS |
+| A3: Pretraining + freezing | Adapt with the decision trunk frozen and without PBRS |
+| A3b: Random freezing | Apply the same freezing pattern to a randomly initialized policy |
+| A4: PBRS only | Train from scratch with PBRS |
+| A5: Pretraining + PBRS | Fine-tune the pretrained policy with PBRS and without freezing |
+| A6: Complete method | Combine pretraining, decision-layer freezing, and PBRS |
 
-## Windows notes
+Freezing applies only to the multilayer-perceptron decision trunk. The GRU feature extractor remains trainable, the output head is reinitialized and trained, and the critic remains trainable. The freezing results therefore concern the decision layers rather than the complete representation.
 
-- Disable sleep before long training runs (admin PowerShell):
-  `powercfg /change standby-timeout-ac 0`
-- Chinese characters garbling in the console is a display issue only; paths
-  with CJK names still resolve correctly.
+### Non-Learning Baselines
+
+Four deterministic routing baselines provide non-learning reference points:
+
+- **OSPF** selects the first path from candidate paths ranked by the sum of inverse link service rates.
+- **ECMP** divides traffic equally among equal-cost candidate paths.
+- **LB** divides traffic inversely according to current load.
+- **RR** rotates among candidate paths in round-robin order.
+
+## Evaluation and Statistical Analysis
+
+Training and evaluation are separated. Evaluation uses greedy actions, ten fixed evaluation episodes, and the same evaluation streams across configurations and scenarios. PBRS is used only where specified during training; evaluation rewards do not include the shaping term.
+
+The final v5 protocol evaluates each learning configuration every 100 training episodes and retains a checkpoint whenever performance reaches a new maximum. The primary final result is obtained from this best checkpoint, while the last-checkpoint result is also retained for comparison with the earlier v4 protocol. The best-checkpoint rule was preregistered before the v5 rerun and applied uniformly to all learning configurations.
+
+The preregistered measures are time to cross a scenario-specific performance threshold, area under the learning curve over the first 500 episodes, and asymptotic performance over the final five evaluation points. Component comparisons use paired t-tests and Wilcoxon signed-rank tests, with Holm correction for multiple comparisons.
+
+## Summary of Findings
+
+The completed v5 experiment supports the following observations:
+
+- All eight target-trained learning configurations exceeded OSPF in the link-failure scenario. Selected configurations also matched or exceeded OSPF in the other scenarios, but the results do not establish general superiority over OSPF.
+- PBRS was the most consistently positive component. Nine of twelve component comparisons were strictly positive, and the remaining three were within 0.0003 of zero.
+- Decision-layer freezing was not beneficial. All eight relevant paired comparisons were negative.
+- Pretraining had scenario-dependent effects. It provided a positive signal on Abilene but was generally unfavorable in the increased-traffic scenario.
+- None of the 28 paired statistical comparisons remained significant after Holm correction. The experiment therefore does not support claims of statistically significant improvement at the available sample size.
+- Best-checkpoint evaluation reduced the effect of late-training decline on reported final performance without changing the underlying training trajectories.
+
+These findings must be interpreted together with their limitations. Best-checkpoint selection gives learning configurations a selection advantage that deterministic baselines do not receive. Ten paired seeds provide limited statistical power, and the GRU representation means that the final method is not identical to the legacy method. Light-load experiments were excluded from the main comparison after the selected hyperparameters proved unsuitable for that regime.
+
+## Experimental Artifacts and Documentation
+
+- [`src/trl_sb3/`](src/trl_sb3/) contains the environment, policies, training pipeline, evaluation methods, and aggregation code.
+- [`config/`](config/) contains the experiment defaults, scenario grids, and preregistered evaluation protocol.
+- [`topologies/`](topologies/) contains the network topology files used by the experiments.
+- [`runs/`](runs/) contains the current v5 run artifacts, including per-run metrics, evaluations, manifests, checkpoints, and completion records where applicable.
+- [`figures_main/`](figures_main/) contains the current figures and statistical summaries.
+- [`runs_final_ckpt_v1/`](runs_final_ckpt_v1/), `ckpts_final_ckpt_v1/`, and [`figures_main_v4/`](figures_main_v4/) preserve the previous last-checkpoint protocol for comparison.
+- [`REPORT.md`](REPORT.md) provides the complete experimental report, numerical results, statistical analysis, and discussion.
+- [`DEVIATIONS.md`](DEVIATIONS.md) records intentional differences from the legacy implementation and earlier experimental protocols.
+- [`RUNBOOK.md`](RUNBOOK.md) documents the execution and artifact-management procedures.
