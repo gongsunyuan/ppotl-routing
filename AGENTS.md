@@ -26,23 +26,94 @@ pilot / main-table runs happen on the GPU machine per `RUNBOOK.md`.
 6. Always use tmux to dispatch the running process
 
 ## Environments
-You have been invoked in the following environment:
-- Primary working directory: ~/ppotl-routing/
-- Is a git repository: yes
-- Is gh authorized: yes
-- Platform: Opencode
-- Shell: nushell
-- OS Version: Ubuntu 20.04.3 LTS (Focal Fossa)
-- You are powered by the model named builtin:zai-coding-plan/GLM-5.3.
+
+- Windows workstation: control plane, editing, tests, and Git operations.
+- Remote GPU server: Ubuntu 20.04, bash, SSH alias `806-net-2`.
+- Remote project root: `/mnt/data/gsy/ppotl-routing`.
+- Remote interpreter: `/mnt/data/gsy/ppotl-routing/.venv/bin/python` (Python 3.13).
+- Use the remote project `.venv`; do not use the system `python`.
+
+## Remote GPU server
+
+Training, sweeps, and full evaluations run on the remote server, not on the
+Windows workstation. The SSH alias `806-net-2` is defined in the operator's
+local `~/.ssh/config`. Keep the host, user, port, and key details there: never
+commit them, a private key, a token, or an `.env` file to this repository.
+
+Connect and run a one-off command:
+
+```powershell
+ssh 806-net-2
+ssh 806-net-2 "cd /mnt/data/gsy/ppotl-routing && .venv/bin/python -m pytest tests -q"
+```
+
+Long jobs must run in `tmux` (hard rule 6). Do not start them in a transient SSH
+shell:
+
+```powershell
+ssh 806-net-2 "cd /mnt/data/gsy/ppotl-routing && mkdir -p logs && tmux new-session -d -s ppotl-run '.venv/bin/python -m trl_sb3.run sweep --grid config/grid_main.yaml --device cuda > logs/ppotl-run.log 2>&1'"
+```
+
+Inspect, attach, or stop the session:
+
+```powershell
+ssh 806-net-2 "tmux ls; tail -n 40 /mnt/data/gsy/ppotl-routing/logs/ppotl-run.log"
+ssh -t 806-net-2 "tmux attach -t ppotl-run"   # detach with Ctrl-b, then d
+ssh 806-net-2 "tmux kill-session -t ppotl-run"
+```
+
+Before launching, check the machine and choose a free GPU. The server has four
+V100S GPUs; `CUDA_VISIBLE_DEVICES` is set per process:
+
+```powershell
+ssh 806-net-2 "nvidia-smi; df -h /mnt/data"
+```
+
+Use `--device cpu` for CPU-bound sweeps when appropriate; see `RUNBOOK.md`
+§6.1 for concurrency guidance.
+
+### Transferring files
+
+Use `scp` from Windows. The installed Windows `rsync` is not reliable with this
+server, and it treats a `C:` path as a remote host. Transfer only the files
+needed, not the whole `runs/` tree.
+
+```powershell
+# local -> remote
+scp .\AGENTS.md 806-net-2:/mnt/data/gsy/ppotl-routing/AGENTS.md
+scp -r .\supplementary 806-net-2:/mnt/data/gsy/ppotl-routing/
+
+# remote -> local
+scp 806-net-2:/mnt/data/gsy/ppotl-routing/revision_independent_test/results/lf.log .\lf.log
+scp -r 806-net-2:/mnt/data/gsy/ppotl-routing/revision_independent_test/results .\remote-results\
+```
+
+For a large directory, archive it remotely first:
+
+```powershell
+ssh 806-net-2 "cd /mnt/data/gsy/ppotl-routing && tar -czf /tmp/ppotl-results.tgz revision_independent_test/results"
+scp 806-net-2:/tmp/ppotl-results.tgz .\ppotl-results.tgz
+```
+
+Result locations on the server: `runs/`, `ckpts/`,
+`revision_independent_test/results/`, and logs under `logs/`.
+
+### Code and artifact sync
+
+Edit and test on the Windows checkout, commit and push to the project's GitHub
+repository, then update the server checkout with `git pull --ff-only` only when
+the server's tracked tree is clean. Do not maintain two divergent copies of a
+tracked source file. Large run artifacts stay untracked and move via `scp`.
 
 ## Common commands
-use the python in the project-root/.venv/
 
-```shell
-& python -m pytest tests -q                                              # tests
-& python -m trl_sb3.run sweep --grid config/grid_main.yaml --device cuda --dry-run
-& python -m trl_sb3.run sweep --grid config/grid_main.yaml --device cuda  # main table
-& python -m trl_sb3.run make_figures --runs runs --out figures_main
+Run these on the GPU server from `/mnt/data/gsy/ppotl-routing`:
+
+```bash
+.venv/bin/python -m pytest tests -q
+.venv/bin/python -m trl_sb3.run sweep --grid config/grid_main.yaml --device cuda --dry-run
+.venv/bin/python -m trl_sb3.run sweep --grid config/grid_main.yaml --device cuda
+.venv/bin/python -m trl_sb3.run make_figures --runs runs --out figures_main
 ```
 
 Pilot / smoke grids (`grid_pilot.yaml`, `grid_smoke.yaml`) and the full sequence:
@@ -51,8 +122,8 @@ see `RUNBOOK.md`.
 ## Testing
 
 After changing environment semantics or method behavior, run
-`& python -m pytest tests -q` — 155+ green is the baseline;
-investigate any red before proceeding.
+`.venv/bin/python -m pytest tests -q` on the remote project root — 155+ green
+is the baseline; investigate any red before proceeding.
 
 ## Known pitfalls
 
